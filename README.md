@@ -1,2 +1,2 @@
-# ImageCodingUtils
-Image coding utility classes
+# vpp video processing project
+video processing utility classes
