@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.11)
 project(libvpp VERSION 1.0.0 LANGUAGES CXX)
 
 #Make sure that custom modules like FindRapidJSON are found
