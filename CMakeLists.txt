@@ -24,7 +24,9 @@ SET(IMAGE_UTILS_SRCS
 
 # interface library for now
 add_library(vpp 
-    ${IMAGE_UTILS_SRCS} ${IMAGE_UTIL_HDRS}
+    ${IMAGE_UTILS_SRCS} 
+    ${IMAGE_UTIL_HDRS} 
+    ${CODEC_UTIL_HDRS}
 )
 
 #Add an alias so that library can be used inside the build tree, e.g. when testing
