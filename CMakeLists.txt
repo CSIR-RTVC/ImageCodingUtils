@@ -12,8 +12,19 @@ list(INSERT CMAKE_MODULE_PATH 0 ${CMAKE_SOURCE_DIR}/cmake)
 ##############################################
 # Create target and set properties
 
+SET(CODEC_UTIL_HDRS
+    ./include/CodecUtils/ICodecv2.h
+)
+SET(IMAGE_UTIL_HDRS
+    ./include/ImageUtils/FastFixedPointRGB24toYUV420Converter.h
+)
+SET(IMAGE_UTILS_SRCS
+    ./src/ImageUtils/FastFixedPointRGB24toYUV420Converter.cpp
+)
+
 # interface library for now
-add_library(vpp INTERFACE
+add_library(vpp 
+    ${IMAGE_UTILS_SRCS} ${IMAGE_UTIL_HDRS}
 )
 
 #Add an alias so that library can be used inside the build tree, e.g. when testing
@@ -24,6 +35,8 @@ target_include_directories(vpp
     PUBLIC
         $<INSTALL_INTERFACE:include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/ImageUtils>
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/CodecUtils>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
