@@ -23,7 +23,7 @@ SET(IMAGE_UTILS_SRCS
 )
 
 # interface library for now
-add_library(vpp 
+add_library(vpp STATIC
     ${IMAGE_UTILS_SRCS} 
     ${IMAGE_UTIL_HDRS} 
     ${CODEC_UTIL_HDRS}
@@ -37,8 +37,8 @@ target_include_directories(vpp
     PUBLIC
         $<INSTALL_INTERFACE:include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/>
-	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/ImageUtils/>
-	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/CodecUtils/>
+		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/ImageUtils/>
+		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/CodecUtils/>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
