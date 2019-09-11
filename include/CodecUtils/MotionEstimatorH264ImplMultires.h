@@ -47,9 +47,11 @@ RESTRICTIONS	: Redistribution and use in source and binary forms, with or withou
 #define _MOTIONESTIMATORH264IMPLMULTIRES_H
 
 #include "IMotionEstimator.h"
+#include "IMotionVectorPredictor.h"
 #include "VectorStructList.h"
 #include "OverlayMem2Dv2.h"
 #include "OverlayExtMem2Dv2.h"
+#include "Fifo.h"
 
 /*
 ---------------------------------------------------------------------------
@@ -85,7 +87,15 @@ public:
 																		int					motionRange,
 																		void*				pDistortionIncluded);
 
-	virtual ~MotionEstimatorH264ImplMultires(void);
+  MotionEstimatorH264ImplMultires(  const void* pSrc,
+                                    const void* pRef,
+                                    int					imgWidth,
+                                    int					imgHeight,
+                                    int					motionRange,
+                                    IMotionVectorPredictor* pMVPred,
+                                    void*				pDistortionIncluded);
+
+  virtual ~MotionEstimatorH264ImplMultires(void);
 
 /// IMotionEstimator Interface.
 public:
@@ -128,6 +138,40 @@ protected:
 	void LoadHalfQuartPelWindow(OverlayMem2Dv2* qPelWin, OverlayMem2Dv2* extRef);
 	void LoadQuartPelWindow(OverlayMem2Dv2* qPelWin, int hPelColOff, int hPelRowOff);
 	void QuarterRead(OverlayMem2Dv2* dstBlock, OverlayMem2Dv2* qPelWin, int qPelColOff, int qPelRowOff);
+
+  /// Select the vector that minimised a cost function from a list of x, y and distortion ordered vectors. The
+  /// euclidian distance is measured from a reference vector. Return the list index of the 
+  /// smallest vector. The values of mx & my are assumed to be copies of the vector from the top
+  /// of the list at pos = 0.
+  int GetBestVector(Fifo* d, Fifo* x, Fifo* y, double lambda, double norm, int xref, int yref, int* mx, int* my)
+  {
+    int pos = 0;
+    int vecLen = (int)x->GetLength();  ///< Assume d, x & y have the same length.
+    double currMag = (double)((((*mx) - xref)*((*mx) - xref)) + (((*my) - yref)*((*my) - yref)));
+    double currDist = d->GetItem(0);
+    double currCost = (currDist / norm) + (lambda*sqrt(currMag));
+
+    for (int ii = 1; ii < vecLen; ii++)
+    {
+      int xVec = (int)x->GetItem(ii);
+      int yVec = (int)y->GetItem(ii);
+      double newMag = (double)(((xVec - xref)*(xVec - xref)) + ((yVec - yref)*(yVec - yref)));
+      double newDist = d->GetItem(ii);
+      double newCost = (newDist / norm) + (lambda*sqrt(newMag));
+      if (newCost < currCost)
+      {
+        (*mx) = xVec;
+        (*my) = yVec;
+        currMag = newMag;
+        currDist = newDist;
+        currCost = newCost;
+        pos = ii;
+      }//end if newCost...
+
+    }//end for ii...
+
+    return(pos);
+  }//end GetBestVector.
 
 protected:
 
@@ -197,7 +241,15 @@ protected:
 	/// Hold the resulting motion vectors in a byte array.
 	VectorStructList*	_pMotionVectorStruct;
 
-	/// A flag per macroblock to include it in the distortion accumulation.
+  /// Fifos to store intermediate results.
+  Fifo  _xVector;
+  Fifo  _yVector;
+  Fifo  _distVector;
+
+  /// Attached motion vector predictor on construction.
+  IMotionVectorPredictor* _pMVPred;
+
+  /// A flag per macroblock to include it in the distortion accumulation.
 	bool*							_pDistortionIncluded;
 };//end MotionEstimatorH264ImplMultires.
 

@@ -193,6 +193,7 @@ public:
 	return						: None.
 	*/
 	static void GetMbMotionMedianPred(MacroBlockH264* mb, int* mvpx, int* mvpy);
+  static void GetMbMotionMedianPred(MacroBlockH264* mb, int* mvpx, int* mvpy, int* distortion);
 
 	/** Calc the median of 3 numbers.
 	@param x	:	1st num.
@@ -232,7 +233,7 @@ public:
 	parameter list. It assumes that the image overlay is of appropriate size.
 	@param mb				:	Macroblock to store.
 	@param lum			: Lum img overlay.
-	@param lumoffx	: X fffset for the Lum overlay.
+	@param lumoffx	: X offset for the Lum overlay.
 	@param lumoffy	: Y offset for the Lum overlay.
 	@param cb				: Cb img overlay.
 	@param cr				: Cb img overlay.
@@ -273,18 +274,27 @@ public:
 	static int HasNonZeroCoeffsProxy(MacroBlockH264* mb);
 
   /** Calculate the distortion between two overlays at this mb's postion.
-  Align the two lum and chr images over this mb and calculate the sum of square error for
-  the three colour spaces. The image spaces must have identical width and height and match
-  the mb initialisation settings. The format must be YCbCr 4:2:0 16x16:8x8:8x8.
+  Align the two lum and chr images over this mb and calculate the sum of square or abs error for
+  the three colour spaces. The image spaces must have identical width and height and match the mb 
+  initialisation settings. The format must be YCbCr 4:2:0 16x16:8x8:8x8.
   @param  p1Y   : 1st Image lum overlay
   @param  p1Cb  : 1st Image chr overlay
   @param  p1Cr  :
   @param  p2Y   : 2nd Image lum overlay
   @param  p2Cb  : 2nd Image chr overlay
   @param  p2Cr  :
-  @return       : Square error distortion
+  @return       : Square/Absolute error distortion
   */
   int Distortion(OverlayMem2Dv2* p1Y, OverlayMem2Dv2* p1Cb, OverlayMem2Dv2* p1Cr, OverlayMem2Dv2* p2Y, OverlayMem2Dv2* p2Cb, OverlayMem2Dv2* p2Cr);
+
+  /** Calculate the distortion between two overlays at this mb's postion.
+  Same as above but for lum only. The image spaces must have identical width and height and match the mb 
+  initialisation settings. The format must be YCbCr 4:2:0 16x16:8x8:8x8.
+  @param  p1Y   : 1st Image lum overlay
+  @param  p2Y   : 2nd Image lum overlay
+  @return       : Square/Absolute error distortion
+  */
+  int Distortion(OverlayMem2Dv2* p1Y, OverlayMem2Dv2* p2Y);
 
   /** Mark this macroblock onto the image.
   For debugging.

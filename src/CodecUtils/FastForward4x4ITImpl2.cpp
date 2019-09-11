@@ -495,6 +495,7 @@ void FastForward4x4ITImpl2::Transform(void* ptr)
 	{
 		/// Scaling and quantisation are combined.
 		const int* pNorm = NormAdjust[_qm];
+
 		for(j = 0; j < 16; j++)
 		{
 			if( block[j] >= 0 )
@@ -573,7 +574,7 @@ the output.
 */
 void FastForward4x4ITImpl2::Transform(void* pIn, void* pCoeff)
 {
-	/// Copy to output and then do in-place inverse transform.
+	/// Copy to output and then do in-place forward transform.
 	memcpy(pCoeff, pIn, sizeof(short) * 16);
 	Transform(pCoeff);
 }//end Transform.
@@ -627,6 +628,59 @@ int FastForward4x4ITImpl2::GetParameter(int paramID)
 
 	return(ret);
 }//end GetParameter.
+
+/** Quantise a single value in a block.
+Implement quantising a value in a specified position of the coeffs at a
+specified QP value.
+@param val  : Value to quantise.
+@param pos  : Postion of value in 1-D array of 2-D data.
+@param qp   : Quant param to use.
+@return     : Result of quantisation.
+*/
+int FastForward4x4ITImpl2::QuantiseValue(short val, int pos, int qp)
+{
+  _q = qp;
+  SetNewQP();
+
+  int norm = 0;
+  switch(pos)
+  {
+    /*  By default norm is 0.
+    case 0:
+    case 2:
+    case 8:
+    case 10:
+      norm = 0;
+      break;
+    */
+
+    case 5:
+    case 7:
+    case 13:
+    case 15:
+      norm = 1;
+      break;
+
+    case 1:
+    case 3:
+    case 4:
+    case 6:
+    case 9:
+    case 11:
+    case 12:
+    case 14:
+      norm = 2;
+      break;
+  }//end switch...
+
+  short quantVal = 0;
+	if( val >= 0 )
+		quantVal = (short)( (((int)val * NormAdjust[_qm][norm]) + _f) >> _scale );
+	else
+		quantVal = (short)(-( (((-(int)val) * NormAdjust[_qm][norm]) + _f) >> _scale ));
+
+  return((int)quantVal);
+}//end QuantiseValue. 
 
 /** Set internal quant members based on _q.
 @return: none.

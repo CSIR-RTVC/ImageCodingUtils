@@ -91,6 +91,7 @@ class IMotionEstimator
 														const void* pRef,
 														long* avgDistortion) = 0;
 		virtual void* Estimate(long* avgDistortion) = 0;
+    virtual void* Estimate(long* avgDistortion, void* param) { return(Estimate(avgDistortion)); }
 
 };//end IMotionEstimator.
 

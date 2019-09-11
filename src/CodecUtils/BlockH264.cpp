@@ -50,7 +50,15 @@ RESTRICTIONS	: Redistribution and use in source and binary forms, with or withou
 #endif
 
 #include <memory.h>
+
 #include "BlockH264.h"
+
+#include "OverlayMem2Dv2.h"
+#include "IForwardTransform.h"
+#include "IInverseTransform.h"
+#include "IContextAwareRunLevelCodec.h"
+#include "IBitStreamReader.h"
+#include "IBitStreamWriter.h"
 
 /*
 ---------------------------------------------------------------------------
@@ -125,6 +133,26 @@ BlockH264::~BlockH264(void)
 	DeleteMem();
 }//end destructor.
 
+void BlockH264::ForwardTransform(IForwardTransform* pIT) 
+{ 
+  pIT->Transform(_pBlk); 
+}
+
+void BlockH264::InverseTransform(IInverseTransform* pIIT) 
+{ 
+  pIIT->InverseTransform(_pBlk); 
+}
+
+void BlockH264::Quantise(IForwardTransform* pQ) 
+{ 
+  pQ->Transform(_pBlk); 
+}
+
+void BlockH264::InverseQuantise(IInverseTransform* pQ) 
+{ 
+  pQ->InverseTransform(_pBlk); 
+}
+
 void BlockH264::DeleteMem(void)
 {
 	if(_blk != NULL)
@@ -168,6 +196,18 @@ void BlockH264::InverseQuantise(IInverseTransform* pQ, int q)
 	pQ->InverseTransform(_pBlk);			///< Do the inverse quant. 
 	pQ->SetMode(mode);								///< Restore previous mode.
 }//end InverseQuantise.
+
+int BlockH264::RleEncode(IContextAwareRunLevelCodec* rlc, IBitStreamWriter* pBsw) {
+  int numBits = rlc->Encode((void *)_pBlk, (void *)pBsw);
+  _numCoeffs = rlc->GetParameter(rlc->NUM_TOT_COEFF_ID);
+  return(numBits);
+}
+
+int BlockH264::RleDecode(IContextAwareRunLevelCodec* rlc, IBitStreamReader* pBsr) {
+  int numBits = rlc->Decode((void *)pBsr, (void *)_pBlk);
+  _numCoeffs = rlc->GetParameter(rlc->NUM_TOT_COEFF_ID);
+  return(numBits);
+}
 
 /** Copy from another block.
 Match the mem size and copy all members and block

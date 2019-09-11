@@ -63,20 +63,22 @@ class IMotionVectorPredictor
 		/** Get the 16x16 2-D prediction for the macroblock/block.
 		@param pList	: Input list of motion vectors.
 		@param blk		: Macroblock/block number to get the prediction for.
-    @param predX  : Output predicted X coordinate
-    @param predX  : Output predicted Y coordinate
+    @param predX  : Output predicted X component of the vector
+    @param predX  : Output predicted Y component
 		@return	      :	1 = success, 0 = failure.
 		*/
 		virtual int Get16x16Prediction(	void* pList, int blk, int* predX, int* predY) = 0;
+    virtual int Get16x16Prediction(void* pList, int blk, int* predX, int* predY, int* distortion) { return(0); }
 
 	  /** Force a 16x16 motion vector for the macroblock/block.
-    Used to set up future predictions.
+    Used to set up future predictions with or without a distortion value.
 	  @param blk	: Macroblock/block number to set.
     @param mvX  : X coordinate
     @param mvY  : Y coordinate
 	  @return	    :	none.
 	  */
     virtual void Set16x16MotionVector(int blk, int mvX, int mvY) {}
+    virtual void Set16x16MotionVector(int blk, int mvX, int mvY, int distortion) {}
 
 };//end IMotionVectorPredictor.
 

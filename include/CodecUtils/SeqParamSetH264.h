@@ -58,8 +58,10 @@ public:
 
 /// Public operators.
 public:
-  void Copy(SeqParamSetH264* from) { CopyProxy(this, from); }
-  int Equals(SeqParamSetH264* to) { return(EqualsProxy(this, to)); }
+  void Copy(SeqParamSetH264* from)  { CopyProxy(this, from); }
+  int Equals(SeqParamSetH264* to)   { return(EqualsProxy(this, to)); }
+  int GetPicWidth(void)             { return( (_pic_width_in_mbs_minus1+1)*16 ); }
+  int GetPicHeight(void)            { return( (_pic_height_in_map_units_minus1+1)*16 );}
 
 /// Private operators.
 private:
@@ -91,6 +93,10 @@ public:
 
 	int _seq_scaling_matrix_present_flag;					///< = 0. No scaling matrices for baseline profile. Indicates existence of _seq_scaling_list_present_flag flags.
 	int _seq_scaling_list_present_flag[8];				///< if _seq_scaling_matrix_present_flag, these indicate lists not present/present (0/1).
+  int _scaling_list_4x4[6][16];
+  int _use_default_scaling_matrix_4x4_flag[6];
+  int _scaling_list_8x8[2][64];
+  int _use_default_scaling_matrix_8x8_flag[2];
 
 	int _log2_max_frame_num_minus4;								///< Range = [0..12]. MaxFrameNum = 2^(_log2_max_frame_num_minus4 + 4) for slice _frame_num derivations.
 

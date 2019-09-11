@@ -1050,7 +1050,7 @@ void* MotionEstimatorH264ImplMultiresCrossVer2::Estimate(long* avgDistortion)
     _xVector.AddFirstIn((double)predX); _yVector.AddFirstIn((double)predY); _distVector.AddFirstIn((double)predVecDiff);
     _xVector.AddFirstIn((double)mvx); _yVector.AddFirstIn((double)mvy); _distVector.AddFirstIn((double)minDiff);
     /// Make a Legrange multiplier based selection for a more optimal motion vector.
-    int vpos = GetBestVector(&_distVector, &_xVector, &_yVector, 256.0, 2, predX, predY, &mvx, &mvy);
+    int vpos = GetBestVector(&_distVector, &_xVector, &_yVector, 0.9, 256.0, 2, predX, predY, &mvx, &mvy);
 
 		/// Check for inclusion in the distortion calculation.
 		if(_pDistortionIncluded != NULL)
@@ -1156,14 +1156,16 @@ the implementation. The returned type holds the vectors. This is
 a multiresolution search algorithm with extended boundaries. The 
 mode setting (_mode) determines the level of resolution.
 @param avgDistortion  : Return the average distortion of the estimation.
-@param constraint     : Apply an optimisation constraint to the estimation.
+@param param          : An implementation specific parameter.
 @return				        : The list of motion vectors.
 */
-void* MotionEstimatorH264ImplMultiresCrossVer2::Estimate(long* avgDistortion, int constraint)
+void* MotionEstimatorH264ImplMultiresCrossVer2::Estimate(long* avgDistortion, void* param)
 {
   int		i,j,m,n,p,q,k,l;
 	int		included = 0;
 	long	totalDifference = 0;
+  /// The param is defined as the cost function Le Grange multiplied in this implementation.
+  double lambda = *((double *)(param));
 
 	/// Set the motion vector struct storage structure.
 	int		maxLength	= _pMotionVectorStruct->GetLength();
@@ -1361,7 +1363,7 @@ void* MotionEstimatorH264ImplMultiresCrossVer2::Estimate(long* avgDistortion, in
 
       /// Select the smallest magnitude vector from the list of best winners.
 //      GetSmallestVector(&_xVector, &_yVector, predX2, predY2, &mx, &my);
-      GetBestVector(&_distVector,&_xVector, &_yVector, 16.0, 2, predX2, predY2, &mx, &my);
+      GetBestVector(&_distVector,&_xVector, &_yVector, lambda, 16.0, 2, predX2, predY2, &mx, &my);
 
 			mx = mx << 1; ///< Convert level 2 full pel units to level 1 full pel units ( x2 ).
 			my = my << 1;
@@ -1495,7 +1497,7 @@ void* MotionEstimatorH264ImplMultiresCrossVer2::Estimate(long* avgDistortion, in
 		}//end else...
 
     /// Select the best vector from the list of best winners.
-    GetBestVector(&_distVector,&_xVector, &_yVector, 64.0, 1, predX1, predY1, &mx, &my);
+    GetBestVector(&_distVector,&_xVector, &_yVector, lambda, 64.0, 1, predX1, predY1, &mx, &my);
 
 		mx = mx << 1; ///< Convert level 1 full pel units to level 0 full pel units ( x2 ).
 		my = my << 1;
@@ -1568,7 +1570,7 @@ void* MotionEstimatorH264ImplMultiresCrossVer2::Estimate(long* avgDistortion, in
 		my += rmy;
 
     /// Select the best vector from the list of best winners.
-    int listPos = GetBestVector(&_distVector,&_xVector, &_yVector, 256.0, 0, predX0Rnd, predY0Rnd, &mx, &my);
+    int listPos = GetBestVector(&_distVector,&_xVector, &_yVector, lambda, 256.0, 0, predX0Rnd, predY0Rnd, &mx, &my);
     minDiff = (int)_distVector.GetItem(listPos);
 
 		///----------------------- Level 0 quarter pel refined search ------------------------
@@ -1671,7 +1673,7 @@ void* MotionEstimatorH264ImplMultiresCrossVer2::Estimate(long* avgDistortion, in
     predY = (predY0 * 4) + predYQuart;
 
     /// Select the best vector at 1/4 pel units from the previous refinement.
-    listPos = GetBestVector(&_distVector,&_xVector, &_yVector, 256.0, 2, predX, predY, &mvx, &mvy);
+    listPos = GetBestVector(&_distVector,&_xVector, &_yVector, lambda, 256.0, 2, predX, predY, &mvx, &mvy);
     minDiff = (int)_distVector.GetItem(listPos);
 
 		_pExtRefOver->SetOrigin(predX0+n,predY0+m);
@@ -1705,7 +1707,7 @@ void* MotionEstimatorH264ImplMultiresCrossVer2::Estimate(long* avgDistortion, in
     _xVector.AddFirstIn((double)predX); _yVector.AddFirstIn((double)predY); _distVector.AddFirstIn((double)predVecDiff);
     _xVector.AddFirstIn((double)mvx); _yVector.AddFirstIn((double)mvy); _distVector.AddFirstIn((double)minDiff);
     /// Use a cost function to select the best of the set. Parameter level = 2 gives best results.
-    int vpos = GetBestVector(&_distVector, &_xVector, &_yVector, 256.0, 2, predX, predY, &mvx, &mvy);
+    int vpos = GetBestVector(&_distVector, &_xVector, &_yVector, lambda, 256.0, 2, predX, predY, &mvx, &mvy);
 
 		/// Check for inclusion in the distortion calculation.
 		if(_pDistortionIncluded != NULL)

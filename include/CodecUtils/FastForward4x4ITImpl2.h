@@ -107,6 +107,16 @@ class FastForward4x4ITImpl2 : public IForwardTransform
 		virtual void	SetParameter(int paramID, int paramVal);
 		virtual int		GetParameter(int paramID);
 
+    /** Quantise a single value in a block.
+    Implement quantising a value in a specified position of the coeffs at a
+    specified QP value.
+    @param val  : Value to quantise.
+    @param pos  : Postion of value in 1-D array of 2-D data.
+    @param qp   : Quant param to use.
+    @return     : Result of quantisation.
+    */
+    virtual int QuantiseValue(short val, int pos, int qp);
+
     /// Internal methods
   private:
     /** Set internal quant members based on _q.
@@ -120,8 +130,8 @@ class FastForward4x4ITImpl2 : public IForwardTransform
 		static const int ColSelector[16];
 
 	protected:
-		int _mode;	///< 0 = IT+Q, 1 = IT only, 2 = Q only.
-		int _intra;	///< 0 = Inter, 1 = Intra.
+		int _mode;	      ///< 0 = IT+Q, 1 = IT only, 2 = Q only.
+		int _intra;	      ///< 0 = Inter, 1 = Intra.
 
 		/// Hold these members that will only change when q or intra flag changes.
 		int	_q;				///< Current quantisation parameter.

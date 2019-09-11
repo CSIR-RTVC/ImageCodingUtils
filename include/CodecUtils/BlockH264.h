@@ -46,12 +46,13 @@ RESTRICTIONS	: Redistribution and use in source and binary forms, with or withou
 
 #pragma once
 
-#include "OverlayMem2Dv2.h"
-#include "IForwardTransform.h"
-#include "IInverseTransform.h"
-#include "IContextAwareRunLevelCodec.h"
-#include "IBitStreamReader.h"
-#include "IBitStreamWriter.h"
+// forward declarations
+class OverlayMem2Dv2;
+class IForwardTransform;
+class IInverseTransform;
+class IContextAwareRunLevelCodec;
+class IBitStreamReader;
+class IBitStreamWriter;
 
 /*
 ---------------------------------------------------------------------------
@@ -75,8 +76,8 @@ public:
 	@param	pIT	: The transform to operate on this block.
 	@return			: None.
 	*/
-	void ForwardTransform(IForwardTransform* pIT) { pIT->Transform(_pBlk); }
-	void InverseTransform(IInverseTransform* pIIT) { pIIT->InverseTransform(_pBlk); }
+  void ForwardTransform(IForwardTransform* pIT);
+  void InverseTransform(IInverseTransform* pIIT);
 
 	/** Quantisation and inverse quantisation of block coeffs.
 	The transform classes are assumed to implement scaling and quantisation on
@@ -95,8 +96,8 @@ public:
 	@param pQ	: A forward transform object to use.
 	@return		: None.
 	*/
-	virtual void Quantise(IForwardTransform* pQ) { pQ->Transform(_pBlk); }
-	virtual void InverseQuantise(IInverseTransform* pQ) { pQ->InverseTransform(_pBlk); }
+  virtual void Quantise(IForwardTransform* pQ);
+  virtual void InverseQuantise(IInverseTransform* pQ);
 
 	/** Run-Level encode and decode to and from a stream.
 	The set up of the run-level codec must be done outside of
@@ -105,12 +106,8 @@ public:
 	@param pBsw/r	: Stream reference to use.
 	@return				: No. of bits consumed.
 	*/
-	int RleEncode(IContextAwareRunLevelCodec* rlc, IBitStreamWriter* pBsw) {	int numBits = rlc->Encode((void *)_pBlk, (void *)pBsw); 
-																																						_numCoeffs = rlc->GetParameter(rlc->NUM_TOT_COEFF_ID);
-																																						return(numBits); } 
-	int RleDecode(IContextAwareRunLevelCodec* rlc, IBitStreamReader* pBsr) {  int numBits = rlc->Decode((void *)pBsr, (void *)_pBlk); 
-																																						_numCoeffs = rlc->GetParameter(rlc->NUM_TOT_COEFF_ID); 
-																																						return(numBits); }
+	int RleEncode(IContextAwareRunLevelCodec* rlc, IBitStreamWriter* pBsw); 
+  int RleDecode(IContextAwareRunLevelCodec* rlc, IBitStreamReader* pBsr);
 	/** Is the block all zeros.
 	Included is the setting of the _coded flag to indicate the
 	existence of non-zero values.
@@ -193,6 +190,7 @@ public:
 	void						CopyRow(int row, void* buff);
 	void						CopyCol(int col, void* buff);
 	void						Zero(void);
+  void            Zero(int start, const int* path)  {   for(int i = start; i < _length; i++) _pBlk[path[i]] = 0; }
 
 /// Private methods.
 protected:
@@ -226,7 +224,7 @@ protected:
 	int							_colour;		///< = {LUM, CB, CR}
 	int							_dcFlag;		///< Indicates that the block holds DC components only.
 	/// Status or temp storage variables.
-	int							_numCoeffs;	///< Temp holder for tot no. of coeffs after an RleEncode or RleDecode.
+	int							_numCoeffs;	///< Temp holder for total no. of coeffs after an RleEncode or RleDecode.
 	/// The block overlay for block functions.
 	OverlayMem2Dv2* _blk;
   

@@ -82,9 +82,19 @@ public:
     MacroBlockH264::GetMbMotionMedianPred( &(_pMb[blk]), predX, predY);
     return(1);
   }
+  int Get16x16Prediction(void* pList, int blk, int* predX, int* predY, int* distortion)
+  {
+    if (_pMb == NULL)
+      return(0);
+
+    MacroBlockH264::GetMbMotionMedianPred(&(_pMb[blk]), predX, predY, distortion);
+    return(1);
+  }
 
 	/** Force a 16x16 motion vector for the macroblock/block.
-  Used to set up future predictions.
+  Used to set up future predictions with or without distortion predictions. The
+  Get16x16Prediction() methods above use the _intraFlag for decisions so it must
+  be set when forcing the vector here.
 	@param blk	: Macroblock/block number to set.
   @param mvX  : X coordinate
   @param mvY  : Y coordinate
@@ -97,6 +107,17 @@ public:
 
     _pMb[blk]._mvX[MacroBlockH264::_16x16] = mvX;
     _pMb[blk]._mvY[MacroBlockH264::_16x16] = mvY;
+    _pMb[blk]._intraFlag = 0;
+  }
+  void Set16x16MotionVector(int blk, int mvX, int mvY, int distortion)
+  {
+    if (_pMb == NULL)
+      return;
+
+    _pMb[blk]._mvX[MacroBlockH264::_16x16] = mvX;
+    _pMb[blk]._mvY[MacroBlockH264::_16x16] = mvY;
+    _pMb[blk]._distortion[0] = distortion;
+    _pMb[blk]._intraFlag = 0;
   }
 
 /// Local methods.

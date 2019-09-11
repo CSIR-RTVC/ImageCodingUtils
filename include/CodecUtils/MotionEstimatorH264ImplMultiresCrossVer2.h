@@ -53,6 +53,7 @@ RESTRICTIONS	: Redistribution and use in source and binary forms, with or withou
 #include "VectorStructList.h"
 #include "OverlayMem2Dv2.h"
 #include "OverlayExtMem2Dv2.h"
+#include "Fifo.h"
 
 /*
 ---------------------------------------------------------------------------
@@ -103,13 +104,16 @@ public:
 	/** Motion estimate the source within the reference.
 	Do the estimation with the block sizes and image sizes defined in
 	the implementation. The returned type holds the vectors.
-	@param pSrc		: Input image to estimate.
-	@param pRef		: Ref to estimate with.
-	@return				: The list of motion vectors.
+	@param pSrc		        : Input image to estimate.
+	@param pRef		        : Ref to estimate with.
+  @param avgDistortion  : Return the average distortion of the estimation.
+  @param constraint     : Apply an optimisation constraint to the estimation.
+	@return				        : The list of motion vectors.
 	*/
 	virtual void* Estimate(const void* pSrc, const void* pRef, long* avgDistortion)
 		{ return(Estimate(avgDistortion)); }
 	virtual void* Estimate(long* avgDistortion);
+	virtual void* Estimate(long* avgDistortion, void* param);
 
 /// Local methods.
 protected:
@@ -133,6 +137,64 @@ protected:
 	void LoadHalfQuartPelWindow(OverlayMem2Dv2* qPelWin, OverlayMem2Dv2* extRef);
 	void LoadQuartPelWindow(OverlayMem2Dv2* qPelWin, int hPelColOff, int hPelRowOff);
 	void QuarterRead(OverlayMem2Dv2* dstBlock, OverlayMem2Dv2* qPelWin, int qPelColOff, int qPelRowOff);
+
+  /// Select the smallest magnitude vector from a list of x, y and distortion ordered vectors. The
+  /// euclidian distance is measured from a reference vector. Return the list index of the 
+  /// smallest vector. The values of mx & my are assumed to be copies of the vector from the top
+  /// of the list at pos = 0.
+  int GetSmallestVector(Fifo* x, Fifo* y, int xref, int yref, int* mx, int* my)
+  {
+    int pos = 0;
+    int vecLen = (int)x->GetLength();  ///< Assume x & y have the same length.
+    for(int ii = 1; ii < vecLen; ii++)
+    {
+      int xVec = (int)x->GetItem(ii);
+      int yVec = (int)y->GetItem(ii);
+      int ax = xVec - xref;
+      int ay = yVec - yref;
+      int bx = (*mx) - xref;
+      int by = (*my) - yref;
+      if( ((ax*ax)+(ay*ay)) < ((bx*bx)+(by*by)) )
+      {
+        (*mx) = xVec;
+        (*my) = yVec;
+        pos = ii;
+      }//end if 
+    }//end for ii...
+
+    return(pos);
+  }//end GetSmallestVector.
+  /// Get vector that minimised a cost function.
+  int GetBestVector(Fifo* d, Fifo* x, Fifo* y, double lambda, double norm, int level, int xref, int yref, int* mx, int* my)
+  {
+    double lclLambda = (lambda * (double)(1 << (level + 2)))/16.0;
+    int pos     = 0;
+    int vecLen  = (int)x->GetLength();  ///< Assume d, x & y have the same length.
+    double currMag  = (double)( (((*mx) - xref)*((*mx) - xref)) + (((*my) - yref)*((*my) - yref)) );
+    double currDist = d->GetItem(0);
+    double currCost = (currDist/norm) + (lclLambda*sqrt(currMag));
+
+    for(int ii = 1; ii < vecLen; ii++)
+    {
+      int xVec = (int)x->GetItem(ii);
+      int yVec = (int)y->GetItem(ii);
+      double newMag  = (double)(((xVec - xref)*(xVec - xref)) + ((yVec - yref)*(yVec - yref)));
+      double newDist = d->GetItem(ii);
+      double newCost = (newDist/norm) + (lambda*sqrt(newMag));
+      if( newCost < currCost )
+      {
+        (*mx)     = xVec;
+        (*my)     = yVec;
+        currMag   = newMag;
+        currDist  = newDist;
+        currCost  = newCost;
+        pos       = ii;
+      }//end if newCost...
+
+    }//end for ii...
+
+    return(pos);
+  }//end GetBestVector.
 
 protected:
 
@@ -198,6 +260,11 @@ protected:
 	/// Temp working block and its overlay.
 	short*							_pMBlk;						///< Motion block temp mem.
 	OverlayMem2Dv2*			_pMBlkOver;				///< Motion block overlay of temp mem.
+
+  /// Fifos to store intermediate results.
+  Fifo  _xVector; 
+  Fifo  _yVector; 
+  Fifo  _distVector; 
 
 	/// Hold the resulting motion vectors in a byte array.
 	VectorStructList*	_pMotionVectorStruct;

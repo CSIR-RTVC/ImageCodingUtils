@@ -90,6 +90,9 @@ MEH264IM_COORD MEH264IM_BottomSubPos[MEH264IM_MOTION_BOTTOM_SUB_POS_LENGTH]	=
 	{-1,-1},{0,-1},{1,-1},{-1,0},{1,0}
 };
 
+/// Num of items in the Fifos.
+#define MEH264IM_FIFO_LENGTH 5
+
 /*
 --------------------------------------------------------------------------
   Macros. 
@@ -123,11 +126,11 @@ MotionEstimatorH264ImplMultires::MotionEstimatorH264ImplMultires(	const void* pS
 }//end constructor.
 
 MotionEstimatorH264ImplMultires::MotionEstimatorH264ImplMultires(	const void* pSrc, 
-																														const void* pRef, 
-																														int					imgWidth, 
-																														int					imgHeight,
-																														int					motionRange,
-																														void*				pDistortionIncluded)
+																														      const void* pRef, 
+																														      int					imgWidth, 
+																														      int					imgHeight,
+																														      int					motionRange,
+																														      void*				pDistortionIncluded)
 {
 	ResetMembers();
 
@@ -142,6 +145,30 @@ MotionEstimatorH264ImplMultires::MotionEstimatorH264ImplMultires(	const void* pS
 	_pDistortionIncluded	= (bool *)pDistortionIncluded;
 
 }//end constructor.
+
+MotionEstimatorH264ImplMultires::MotionEstimatorH264ImplMultires( const void*             pSrc,
+                                                                  const void*             pRef,
+                                                                  int					            imgWidth,
+                                                                  int					            imgHeight,
+                                                                  int					            motionRange,
+                                                                  IMotionVectorPredictor* pMVPred,
+                                                                  void*				            pDistortionIncluded)
+{
+  ResetMembers();
+
+  /// Parameters must remain const for the life time of this instantiation.
+  _imgWidth             = imgWidth;					///< Width of the src and ref images. 
+  _imgHeight            = imgHeight;				///< Height of the src and ref images.
+  _macroBlkWidth        = 16;								///< Width of the motion block = 16 for H.263.
+  _macroBlkHeight       = 16;								///< Height of the motion block = 16 for H.263.
+  _motionRange          = motionRange;			///< (4x,4y) range of the motion vectors. _motionRange in 1/4 pel units.
+  _pInput               = pSrc;
+  _pRef                 = pRef;
+  _pMVPred              = pMVPred;
+  _pDistortionIncluded  = (bool *)pDistortionIncluded;
+
+}//end constructor.
+
 
 void MotionEstimatorH264ImplMultires::ResetMembers(void)
 {
@@ -209,6 +236,13 @@ void MotionEstimatorH264ImplMultires::ResetMembers(void)
 
 	/// Hold the resulting motion vectors in a byte array.
 	_pMotionVectorStruct = NULL;
+  /// Attached motion vector predictor on construction.
+  _pMVPred = NULL;
+
+  /// Set up the fifos.
+  _xVector.Create(MEH264IM_FIFO_LENGTH);
+  _yVector.Create(MEH264IM_FIFO_LENGTH);
+  _distVector.Create(MEH264IM_FIFO_LENGTH);
 
 	/// A flag per macroblock to include it in the distortion accumulation.
 	_pDistortionIncluded = NULL;
@@ -605,14 +639,28 @@ void* MotionEstimatorH264ImplMultires::Estimate(long* avgDistortion)
 		/// Depending on which img boundary we are on will limit the full search range.
 		int xlRng, xrRng, yuRng, ydRng;
 
-		/// The [0,0] motion vector difference between the input and ref blocks is the most
-		/// likely candidate and is therefore the starting point.
+    /// The predicted vector difference between the input and ref blocks is the most
+    /// likely candidate and is therefore the starting best distortion point.
+    int predX, predY, predX0Rnd, predY0Rnd, predX1Rnd, predY1Rnd, predX2Rnd, predY2Rnd;
+    _pMVPred->Get16x16Prediction(NULL, vecPos, &predX, &predY);
+    int predXQuart = predX % 4;
+    int predYQuart = predY % 4;
+    int predX0 = predX / 4;
+    int predY0 = predY / 4;
+    if (predX < 0)             ///< Nearest level 0, level 1 and level 2 pred motion vector.
+      { predX0Rnd = (predX - 2) / 4;  predX1Rnd = (predX - 4) / 8; predX2Rnd = (predX - 8) / 16; }
+    else
+      { predX0Rnd = (predX + 2) / 4;  predX1Rnd = (predX + 4) / 8; predX2Rnd = (predX + 8) / 16;}
+    if (predY < 0)
+      { predY0Rnd = (predY - 2) / 4;  predY1Rnd = (predY - 4) / 8; predY2Rnd = (predY - 8) / 16; }
+    else
+      { predY0Rnd = (predY + 2) / 4;  predY1Rnd = (predY + 4) / 8; predY2Rnd = (predY + 8) / 16; }
 
 		/// Level 0: Set the input and ref blocks to work with.
 		_pInOver->SetOrigin(n,m);
 		_pExtRefOver->SetOrigin(n,m);
 
-		/// Absolute/square diff comparison method.
+		/// Absolute/square diff comparison method. Determine (0,0) motion as the reference vector.
 #ifdef MEH264IM_ABS_DIFF
 		int zeroVecDiff = _pInOver->Tad16x16(*_pExtRefOver);
 #else
@@ -631,7 +679,7 @@ void* MotionEstimatorH264ImplMultires::Estimate(long* avgDistortion)
 #ifdef MEH264IM_ABS_DIFF
 			int minDiffL2 = _pInL2Over->Tad4x4(*_pExtRefL2Over);
 #else
-			int minDiffL2 = _pInL2Over->Tsd4x4(*_pExtRefL2Over);
+			int minDiffL2 = _pInL2Over->Tsd4x4(*_pExtRefL2Over);  ///< (0,0) motion at level 2 resolution.
 #endif
 			
     	/// Level 2: Search on a full pel grid over the defined L2 motion range.
@@ -641,7 +689,7 @@ void* MotionEstimatorH264ImplMultires::Estimate(long* avgDistortion)
     	{
     	  for(j = xlRng; j <= xrRng; j++)
     	  {
-                                        int blkDiff = 0;
+          int blkDiff = 0;
 					/// Early exit because zero motion vec already checked.
 					if( !(i||j) )	goto MEH264IM_LEVEL2_BREAK;
 			
@@ -657,10 +705,15 @@ void* MotionEstimatorH264ImplMultires::Estimate(long* avgDistortion)
 #endif
 					if(blkDiff <= minDiffL2)
 					{
-						/// Weight the equal diff with the smallest motion vector magnitude. 
+						/// Weight the equal diff with the smallest mv magnitude from the predicted mv. 
 						if(blkDiff == minDiffL2)
 						{
-							int vecDistDiff = ( (my*my)+(mx*mx) )-( (i*i)+(j*j) );
+              int currX = mx - predX2Rnd;
+              int currY = my - predY2Rnd;
+              int newX = j - predX2Rnd;
+              int newY = i - predY2Rnd;
+              int vecDistDiff = ((currY*currY) + (currX*currX)) - ((newY*newY) + (newX*newX));
+//              int vecDistDiff = ( (my*my)+(mx*mx) )-( (i*i)+(j*j) );
 							if(vecDistDiff < 0)
 								goto MEH264IM_LEVEL2_BREAK;
 						}//end if blkDiff...
@@ -684,7 +737,7 @@ void* MotionEstimatorH264ImplMultires::Estimate(long* avgDistortion)
 		_pInL1Over->SetOrigin(q,p);
 		_pExtRefL1Over->SetOrigin(mx+q,my+p);
 
-		/// Absolute/square  diff comparison method.
+		/// Absolute/square diff comparison method for refinement around (mx,my) in level 1 pel units.
 #ifdef MEH264IM_ABS_DIFF
 		int minDiffL1 = _pInL1Over->Tad8x8(*_pExtRefL1Over);
 #else
@@ -692,7 +745,7 @@ void* MotionEstimatorH264ImplMultires::Estimate(long* avgDistortion)
 #endif
 
     /// Level 1: Search on a full pel grid over the defined L1 motion range. The
-		///					range is a refinement if Level 2 was done (_mode = 2).
+		///					 range is a refinement if Level 2 was done (_mode = 2).
 		rmx = 0;	///< Refinement motion vector centre.
 		rmy = 0;
 		GetMotionRange(q, p, mx, my, &xlRng, &xrRng, &yuRng, &ydRng, lclL1MotionRange, 1);
@@ -705,22 +758,27 @@ void* MotionEstimatorH264ImplMultires::Estimate(long* avgDistortion)
 				/// Early exit because zero (centre) motion vec already checked.
 				if( !(i||j) )	goto MEH264IM_LEVEL1_BREAK;
 
-				/// Set the block to the [j,i] motion vector around the [mx+p,my+q] reference
+				/// Set the block to the (j,i) motion vector around the (mx+p,my+q) reference
 				/// location.
 				_pExtRefL1Over->SetOrigin(j+mx+q, i+my+p);
 
 #ifdef MEH264IM_ABS_DIFF
 				blkDiff = _pInL1Over->Tad8x8LessThan(*_pExtRefL1Over, minDiffL1);
 #else
-				blkDiff = _pInL1Over->Tsd8x8PartialLessThan(*_pExtRefL1Over, minDiffL1);
-//				int blkDiff = _pInL1Over->Tsd8x8LessThan(*_pExtRefL1Over, minDiffL1);
+//				blkDiff = _pInL1Over->Tsd8x8PartialLessThan(*_pExtRefL1Over, minDiffL1);
+				blkDiff = _pInL1Over->Tsd8x8LessThan(*_pExtRefL1Over, minDiffL1);
 #endif
 				if(blkDiff <= minDiffL1)
 				{
-					/// Weight the equal diff with the smallest motion vector magnitude. 
+					/// Weight the equal diff with the smallest predicted motion vector magnitude. 
 					if(blkDiff == minDiffL1)
 					{
-						int vecDistDiff = ( ((my+rmy)*(my+rmy))+((mx+rmx)*(mx+rmx)) )-( ((my+i)*(my+i))+((mx+j)*(mx+j)) );
+            int currX = mx + rmx - predX1Rnd;
+            int currY = my + rmy - predY1Rnd;
+            int newX = mx + j - predX1Rnd;
+            int newY = my + i - predY1Rnd;
+            int vecDistDiff = ((currY*currY) + (currX*currX)) - ((newY*newY) + (newX*newX));
+//            int vecDistDiff = ( ((my+rmy)*(my+rmy))+((mx+rmx)*(mx+rmx)) )-( ((my+i)*(my+i))+((mx+j)*(mx+j)) );
 						if(vecDistDiff < 0)
 							goto MEH264IM_LEVEL1_BREAK;
 					}//end if blkDiff...
@@ -758,25 +816,30 @@ void* MotionEstimatorH264ImplMultires::Estimate(long* avgDistortion)
     {
 			for(j = xlRng; j <= xrRng; j++)
 			{
-                                int blkDiff = 0; 
+        int blkDiff = 0; 
 				/// Early exit because zero motion vec already checked.
 				if( !(i||j) )	goto MEH264IM_LEVEL0_BREAK;
 
-				/// Set the block to the [j,i] motion vector around the [n+mx,m+my] reference location.
+				/// Set the block to the (j,i) motion vector around the [n+mx,m+my] reference location.
 				_pExtRefOver->SetOrigin(n+mx+j, m+my+i);
 
 #ifdef MEH264IM_ABS_DIFF
 				blkDiff = _pInOver->Tad16x16LessThan(*_pExtRefOver, minDiff);
 #else
-					blkDiff = _pInOver->Tsd16x16PartialLessThan(*_pExtRefOver, minDiff);
-//				int blkDiff = _pInOver->Tsd16x16LessThan(*_pExtRefOver, minDiff);
+//					blkDiff = _pInOver->Tsd16x16PartialLessThan(*_pExtRefOver, minDiff);
+				blkDiff = _pInOver->Tsd16x16LessThan(*_pExtRefOver, minDiff);
 #endif
 				if(blkDiff <= minDiff)
 				{
 					/// Weight the equal diff with the smallest global motion vector magnitude. 
 					if(blkDiff == minDiff)
 					{
-						int vecDistDiff = ( ((my+rmy)*(my+rmy))+((mx+rmx)*(mx+rmx)) )-( ((my+i)*(my+i))+((mx+j)*(mx+j)) );
+            int currX = mx + rmx - predX0Rnd;
+            int currY = my + rmy - predY0Rnd;
+            int newX = mx + j - predX0Rnd;
+            int newY = my + i - predY0Rnd;
+            int vecDistDiff = ((currY*currY) + (currX*currX)) - ((newY*newY) + (newX*newX));
+//            int vecDistDiff = ( ((my+rmy)*(my+rmy))+((mx+rmx)*(mx+rmx)) )-( ((my+i)*(my+i))+((mx+j)*(mx+j)) );
 						if(vecDistDiff < 0)
 							goto MEH264IM_LEVEL0_BREAK;
 					}//end if blkDiff...
@@ -802,7 +865,7 @@ void* MotionEstimatorH264ImplMultires::Estimate(long* avgDistortion)
 		int mvx = mx << 2;	///< Convert to 1/4 pel units.
 		int mvy = my << 2;
 
-		/// Set the location to the min diff motion vector [mx,my].
+		/// Set the location to the min diff motion vector (mx,my) in full pel units.
 		_pExtRefOver->SetOrigin(n+mx, m+my);
 
 		/// Fill the 1/4 pel window with valid values only in the 1/2 pel positions.
@@ -818,8 +881,8 @@ void* MotionEstimatorH264ImplMultires::Estimate(long* avgDistortion)
 #ifdef MEH264IMC_ABS_DIFF
 			int blkDiff = _pInOver->Tad16x16LessThan(*_pMBlkOver, minDiff);
 #else
-			int blkDiff = _pInOver->Tsd16x16PartialLessThan(*_pMBlkOver, minDiff);
-//		int blkDiff = _pInOver->Tsd16x16LessThan(*_pMBlkOver, minDiff);
+//			int blkDiff = _pInOver->Tsd16x16PartialLessThan(*_pMBlkOver, minDiff);
+		int blkDiff = _pInOver->Tsd16x16LessThan(*_pMBlkOver, minDiff);
 #endif
 			if(blkDiff < minDiff)
 			{
@@ -846,8 +909,8 @@ void* MotionEstimatorH264ImplMultires::Estimate(long* avgDistortion)
 #ifdef MEH264IMC_ABS_DIFF
 			int blkDiff = _pInOver->Tad16x16LessThan(*_pMBlkOver, minDiff);
 #else
-			int blkDiff = _pInOver->Tsd16x16PartialLessThan(*_pMBlkOver, minDiff);
-//		int blkDiff = _pInOver->Tsd16x16LessThan(*_pMBlkOver, minDiff);
+//			int blkDiff = _pInOver->Tsd16x16PartialLessThan(*_pMBlkOver, minDiff);
+		int blkDiff = _pInOver->Tsd16x16LessThan(*_pMBlkOver, minDiff);
 #endif
 			if(blkDiff < minDiff)
 			{
@@ -861,6 +924,9 @@ void* MotionEstimatorH264ImplMultires::Estimate(long* avgDistortion)
 		mvx += qmx;
 		mvy += qmy;
 
+    /// At this point the best motion is (mvx,mvy) in 1/4 pel units with minDiff distortion
+    /// and the zero motion (0,0) has zeroVecDiff distortion.
+
 		/// Bounds check used for debugging only because minDiff will not hold the correct value.
 		//if(mvx < -_motionRange) 
 		//	mvx = -_motionRange;
@@ -871,60 +937,78 @@ void* MotionEstimatorH264ImplMultires::Estimate(long* avgDistortion)
 		//else if(mvy >= _motionRange)
 		//	mvy = (_motionRange-1);
 
-		/// Validity of the motion vector is weighted with non-linear factors.
-		int weight						= 0;
-		int diffWithZeroDiff	= zeroVecDiff - minDiff;
-		int magSqr						= (mvx * mvx) + (mvy * mvy);
+    ///----------------------- Quarter pel Pred vector ----------------------------
+    /// Compare this winning vector with the predicted mv but truncate it if it
+    /// falls outside of one mb width or height outside the img boundaries.
+    if ((predX0 + n) > _imgWidth)
+      predX0 = _macroBlkWidth;
+    if ((predX0 + n) < -_macroBlkWidth)
+      predX0 = -_macroBlkWidth;
+    if ((predY0 + m) > _imgHeight)
+      predY0 = _macroBlkHeight;
+    if ((predY0 + m) < -_macroBlkHeight)
+      predY0 = -_macroBlkHeight;
+    predX = (predX0 * 4) + predXQuart;
+    predY = (predY0 * 4) + predYQuart;
 
-#ifdef MEH264IM_ABS_DIFF
-		/// Contribute if motion vector is small.
-		if((diffWithZeroDiff * 2) < magSqr)
-			weight++;
-		/// Contribute if same order as the noise.
-		if(zeroVecDiff < MEH264IM_MOTION_NOISE_FLOOR)
-			weight++;
-		/// Contribute if the zero vector and min diff vector are similar.
-		if((diffWithZeroDiff * 7) < minDiff)
-			weight++;
-#else
-		/// Contribute if motion vector is small.
-		if(diffWithZeroDiff < magSqr)
-			weight++;
-		/// Contribute if same order as the noise.
-		if(zeroVecDiff < MEH264IM_FULL_MOTION_NOISE_FLOOR)
-			weight++;
-		/// Contribute if the zero vector and min energy vector are similar.
-		if((diffWithZeroDiff * 10) < minDiff)
-			weight++;
-#endif
+    _pExtRefOver->SetOrigin(predX0 + n, predY0 + m);
 
-		/// Check for inclusion in the distortion calculation.
-		bool doIt = true;
-		if(_pDistortionIncluded != NULL)
-			doIt = _pDistortionIncluded[vecPos];
-		if(doIt)
-			included++;
-
-		/// Decide whether or not to accept the final motion vector or revert to the zero vector.
-		if((minDiff < zeroVecDiff)&&(weight < 2))
+    /// Get distortion at pred mv.
+    int predVecDiff = 0;
+    /// Quarter read first if necessary.
+    if (predXQuart || predYQuart)
     {
-			if(doIt)
-				totalDifference += minDiff;
-    }//end if min_energy...
+      /// Read the quarter grid pels into temp.
+      _pExtRefOver->QuarterRead(*_pMBlkOver, predXQuart, predYQuart);
+      /// Absolute/square diff comparison method.
+#ifdef MEH264IF_ABS_DIFF
+      predVecDiff = _pInOver->Tad16x16(*_pMBlkOver);
+#else
+      predVecDiff = _pInOver->Tsd16x16(*_pMBlkOver);
+      //predVecDiff = _pInOver->Tsd16x16PartialPath(*_pMBlkOver, (void *)MEH264IC_LinearPath, _pathLength);
+      //predVecDiff = _pInOver->Tsd16x16PartialPath(*_pMBlkOver, (void *)MEH264IF_OptimalPath, _pathLength);
+#endif
+    }//end if predXQuart...
     else
-		{
-			mvx = 0;
-			mvy = 0;
-			if(doIt)
-				totalDifference += zeroVecDiff;
-		}//end else...
+    {
+#ifdef MEH264IF_ABS_DIFF
+      predVecDiff = _pInOver->Tad16x16(*_pExtRefOver);
+#else
+      predVecDiff = _pInOver->Tsd16x16(*_pExtRefOver);
+      //predVecDiff = _pInOver->Tsd16x16PartialPath(*_pExtRefOver, (void *)MEH264IC_LinearPath, _pathLength);
+      //predVecDiff = _pInOver->Tsd16x16PartialPath(*_pExtRefOver, (void *)MEH264IF_OptimalPath, _pathLength);
+#endif
+    }//end else...
+
+     /// Initialise the fifos and load the zero vector, pred vector and the curr best vector.
+    _xVector.MarkAsEmpty(); _yVector.MarkAsEmpty(); _distVector.MarkAsEmpty();
+    _xVector.AddFirstIn(0.0); _yVector.AddFirstIn(0.0); _distVector.AddFirstIn((double)zeroVecDiff);
+    _xVector.AddFirstIn((double)predX); _yVector.AddFirstIn((double)predY); _distVector.AddFirstIn((double)predVecDiff);
+    _xVector.AddFirstIn((double)mvx); _yVector.AddFirstIn((double)mvy); _distVector.AddFirstIn((double)minDiff);
+    /// Make a Legrange multiplier based selection for a more optimal motion vector.
+    //      int vpos = GetBestVector(&_distVector, &_xVector, &_yVector, 0.9, (double)_pathLength, predX, predY, &mvx, &mvy);
+    int vpos = GetBestVector(&_distVector, &_xVector, &_yVector, 1.1, 256.0, predX, predY, &mvx, &mvy);
+
+    /// Check for inclusion in the distortion calculation.
+    if (_pDistortionIncluded != NULL)
+    {
+      mvx = (int)_xVector.GetItem(vpos);
+      mvy = (int)_yVector.GetItem(vpos);
+      if (_pDistortionIncluded[vecPos])
+      {
+        included++;
+        totalDifference += (int)_distVector.GetItem(vpos);
+      }//end if _pDistortionIncluded...
+    }//end if _pDistortionIncluded...
 
 		/// Load the selected vector coord.
 		if(vecPos < maxLength)
 		{
 			_pMotionVectorStruct->SetSimpleElement(vecPos, 0, mvx);
 			_pMotionVectorStruct->SetSimpleElement(vecPos, 1, mvy);
-			vecPos++;
+      /// Set macroblock vector for future predictions.
+      _pMVPred->Set16x16MotionVector(vecPos, mvx, mvy);
+      vecPos++;
 		}//end if vecPos...
 
   }//end for m & n...

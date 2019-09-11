@@ -56,6 +56,8 @@ RESTRICTIONS	: Redistribution and use in source and binary forms, with or withou
 */
 SeqParamSetH264::SeqParamSetH264(int seqParamSetId)
 {
+  int i;
+
 	_seq_parameter_set_id										= seqParamSetId;	///< The index for this definition of sequence params [0..31].
 
 	_profile_idc														= 66;							///< Baseline profile = 66.
@@ -72,7 +74,9 @@ SeqParamSetH264::SeqParamSetH264(int seqParamSetId)
 	_qpprime_y_zero_transform_bypass_flag		= 0;							///< If QP = 0, this flag indicates bypassing the transform process. When not present = 0.
 
 	_seq_scaling_matrix_present_flag				= 0;							///< = 0. No scaling matrices for baseline profile. Indicates existence of _seq_scaling_list_present_flag flags.
-	/// Not initialised _seq_scaling_list_present_flag[8]			///< if _seq_scaling_matrix_present_flag, these indicate lists not present/present (0/1).
+	for(i = 0; i < 8; i++)                              			///< if _seq_scaling_matrix_present_flag, these indicate lists not present/present (0/1).
+	  _seq_scaling_list_present_flag[i]     = 0;
+  /// Not initialised _scaling_list_4x4[6][16], _use_default_scaling_matrix_4x4_flag[6], _scaling_list_8x8[2][64], _use_default_scaling_matrix_8x8_flag[2]
 
 	_log2_max_frame_num_minus4							= 12;							///< Range = [0..12]. MaxFrameNum = 2^(_log2_max_frame_num_minus4 + 4) for slice _frame_num derivations.
 
@@ -111,6 +115,8 @@ SeqParamSetH264::~SeqParamSetH264(void)
 
 void SeqParamSetH264::CopyProxy(SeqParamSetH264* me, SeqParamSetH264* from)
 {
+  int i;
+
 	me->_seq_parameter_set_id	                  = from->_seq_parameter_set_id;
 
 	me->_profile_idc														= from->_profile_idc;
@@ -127,7 +133,9 @@ void SeqParamSetH264::CopyProxy(SeqParamSetH264* me, SeqParamSetH264* from)
 	me->_qpprime_y_zero_transform_bypass_flag		= from->_qpprime_y_zero_transform_bypass_flag;
 
 	me->_seq_scaling_matrix_present_flag				= from->_seq_scaling_matrix_present_flag;
-	/// Not initialised _seq_scaling_list_present_flag[8]
+  for(i = 0; i < 8; i++)
+	  me->_seq_scaling_list_present_flag[i]     = from->_seq_scaling_list_present_flag[i];
+  /// Not copied _scaling_list_4x4[6][16], _use_default_scaling_matrix_4x4_flag[6], _scaling_list_8x8[2][64], _use_default_scaling_matrix_8x8_flag[2]
 
 	me->_log2_max_frame_num_minus4							= from->_log2_max_frame_num_minus4;
 
@@ -137,7 +145,7 @@ void SeqParamSetH264::CopyProxy(SeqParamSetH264* me, SeqParamSetH264* from)
 	me->_offset_for_non_ref_pic									= from->_offset_for_non_ref_pic;
 	me->_offset_for_top_to_bottom_field					= from->_offset_for_top_to_bottom_field;
 	me->_num_ref_frames_in_pic_order_cnt_cycle	= from->_num_ref_frames_in_pic_order_cnt_cycle;
-	/// Not initialised _offset_for_ref_frame[256];
+	/// Not copied _offset_for_ref_frame[256];
 
 	me->_num_ref_frames													= from->_num_ref_frames;
 	me->_gaps_in_frame_num_value_allowed_flag		= from->_gaps_in_frame_num_value_allowed_flag;
@@ -181,7 +189,8 @@ int SeqParamSetH264::EqualsProxy(SeqParamSetH264* me, SeqParamSetH264* to)
 
 	if(me->_seq_scaling_matrix_present_flag				!= to->_seq_scaling_matrix_present_flag)
     return(0);
-	/// Not initialised _seq_scaling_list_present_flag[8]
+	/// Not compared _seq_scaling_list_present_flag[8]
+  /// Not compared _scaling_list_4x4[6][16], _use_default_scaling_matrix_4x4_flag[6], _scaling_list_8x8[2][64], _use_default_scaling_matrix_8x8_flag[2]
 
 	if(me->_log2_max_frame_num_minus4							!= to->_log2_max_frame_num_minus4)
     return(0);

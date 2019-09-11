@@ -114,13 +114,14 @@ public:
 
 	int GetStreamBitsRemaining(void) { return(BitStreamBaseMSB::GetStreamBitsRemaining()); }
 
-	void Copy(IBitStreamReader* pFrom)
-    {
-      _bitStream  = (unsigned char*)pFrom->GetStream();
-      _bitSize    = pFrom->GetStreamBitSize();
-      _bytePos    = pFrom->GetStreamBytePos();
-      _bitPos     = pFrom->GetStreamBitPos() % 8;
-    }//end Copy.
+  void Copy(IBitStreamReader* pFrom)
+  {
+    _bitStream  = (unsigned char*)pFrom->GetStream();
+    _bitSize    = pFrom->GetStreamBitSize();
+    _bytePos    = pFrom->GetStreamBytePos();
+    _bitPos     = pFrom->GetStreamBitPos() % 8;
+  }//end Copy.
+
 };// end class BitStreamReaderMSB.
 
 #endif	// _BITSTREAMREADERMSB_H

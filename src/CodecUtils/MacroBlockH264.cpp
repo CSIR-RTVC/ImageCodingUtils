@@ -51,6 +51,10 @@ RESTRICTIONS	: Redistribution and use in source and binary forms, with or withou
 #include <string.h>
 #include "MacroBlockH264.h"
 #include "MeasurementTable.h"
+#include "OverlayMem2Dv2.h"
+
+/// Macros
+#include "CodecDistortionDef.h"
 
 /// It is simpler to derive neighbourhoods of macroblocks if they are left in 
 /// rater scanning order right up until their encodings are written onto the
@@ -752,66 +756,165 @@ return						: None.
 */
 void MacroBlockH264::GetMbMotionMedianPred(MacroBlockH264* mb, int* mvpx, int* mvpy)
 {
-	// TODO: Only the 16x16 prediction case is considered here. All other cases still to be coded.
+  // TODO: Only the 16x16 prediction case is considered here. All other cases still to be coded.
 
-	int Ax = 0;
-	int Ay = 0;
-	int Bx = 0;
-	int By = 0;
-	int Cx = 0;
-	int Cy = 0;
+  int Ax = 0;
+  int Ay = 0;
+  int Bx = 0;
+  int By = 0;
+  int Cx = 0;
+  int Cy = 0;
 
-	/// All intra neighbours are set to have zero vectors.
-	if(mb->_leftMb != NULL)	///< A
-	{
-		if( !(mb->_leftMb)->_intraFlag )
-		{
-			Ax = (mb->_leftMb)->_mvX[MacroBlockH264::_16x16];
-			Ay = (mb->_leftMb)->_mvY[MacroBlockH264::_16x16];
-		}//end if _intraFlag...
-	}//end if _leftMb...
-	if(mb->_aboveMb != NULL)	///< B
-	{
-		if( !(mb->_aboveMb)->_intraFlag )
-		{
-			Bx = (mb->_aboveMb)->_mvX[MacroBlockH264::_16x16];
-			By = (mb->_aboveMb)->_mvY[MacroBlockH264::_16x16];
-		}//end if _intraFlag...
-	}//end if _aboveMb...
-	if(mb->_aboveRightMb != NULL)	///< C
-	{
-		if( !(mb->_aboveRightMb)->_intraFlag )
-		{
-			Cx = (mb->_aboveRightMb)->_mvX[MacroBlockH264::_16x16];
-			Cy = (mb->_aboveRightMb)->_mvY[MacroBlockH264::_16x16];
-		}//end if _intraFlag...
-	}//end if _aboveRightMb...
-	else	///< Replace C with D (if D exists)
-	{
-		if(mb->_aboveLeftMb != NULL)	/// D
-		{
-			if( !(mb->_aboveLeftMb)->_intraFlag )
-			{
-				Cx = (mb->_aboveLeftMb)->_mvX[MacroBlockH264::_16x16];
-				Cy = (mb->_aboveLeftMb)->_mvY[MacroBlockH264::_16x16];
-			}//end if _intraFlag...
-		}//end if D...
-	}//end else !C...
+  /// All intra neighbours are set to have zero vectors.
+  if (mb->_leftMb != NULL)	///< A
+  {
+    if (!(mb->_leftMb)->_intraFlag)
+    {
+      Ax = (mb->_leftMb)->_mvX[MacroBlockH264::_16x16];
+      Ay = (mb->_leftMb)->_mvY[MacroBlockH264::_16x16];
+    }//end if _intraFlag...
+  }//end if _leftMb...
+  if (mb->_aboveMb != NULL)	///< B
+  {
+    if (!(mb->_aboveMb)->_intraFlag)
+    {
+      Bx = (mb->_aboveMb)->_mvX[MacroBlockH264::_16x16];
+      By = (mb->_aboveMb)->_mvY[MacroBlockH264::_16x16];
+    }//end if _intraFlag...
+  }//end if _aboveMb...
+  if (mb->_aboveRightMb != NULL)	///< C
+  {
+    if (!(mb->_aboveRightMb)->_intraFlag)
+    {
+      Cx = (mb->_aboveRightMb)->_mvX[MacroBlockH264::_16x16];
+      Cy = (mb->_aboveRightMb)->_mvY[MacroBlockH264::_16x16];
+    }//end if _intraFlag...
+  }//end if _aboveRightMb...
+  else	///< Replace C with D (if D exists)
+  {
+    if (mb->_aboveLeftMb != NULL)	/// D
+    {
+      if (!(mb->_aboveLeftMb)->_intraFlag)
+      {
+        Cx = (mb->_aboveLeftMb)->_mvX[MacroBlockH264::_16x16];
+        Cy = (mb->_aboveLeftMb)->_mvY[MacroBlockH264::_16x16];
+      }//end if _intraFlag...
+    }//end if D...
+  }//end else !C...
 
-	/// Handle the special case of !B and !C by replacing them with A.
-	if( (mb->_aboveMb == NULL) && (mb->_aboveRightMb == NULL) )
-	{
-		Bx = Ax;
-		By = Ay;
-		Cx = Ax;
-		Cy = Ay;
-	}//end !B and !C...
+   /// Handle the special case of !B and !C by replacing them with A.
+  if ((mb->_aboveMb == NULL) && (mb->_aboveRightMb == NULL))
+  {
+    Bx = Ax;
+    By = Ay;
+    Cx = Ax;
+    Cy = Ay;
+  }//end !B and !C...
 
-	*mvpx = mb->Median(Ax, Bx, Cx);
-	*mvpy = mb->Median(Ay, By, Cy);
+  *mvpx = mb->Median(Ax, Bx, Cx);
+  *mvpy = mb->Median(Ay, By, Cy);
 }//end GetMbMotionMedianPred.
 
-/** Calc the median of 3 numbers.
+void MacroBlockH264::GetMbMotionMedianPred(MacroBlockH264* mb, int* mvpx, int* mvpy, int* distortion)
+{
+  // TODO: Only the 16x16 prediction case is considered here. All other cases still to be coded.
+
+  int Ax = 0;  int Ay = 0;  int Ad = 0;
+  int Bx = 0;  int By = 0;  int Bd = 0;
+  int Cx = 0;  int Cy = 0;  int Cd = 0;
+
+  /// All intra neighbours are set to have zero vectors and zero distortion
+  if (mb->_leftMb != NULL)	///< A
+  {
+    if (!(mb->_leftMb)->_intraFlag)
+    {
+      Ax = (mb->_leftMb)->_mvX[MacroBlockH264::_16x16];
+      Ay = (mb->_leftMb)->_mvY[MacroBlockH264::_16x16];
+      Ad = (mb->_leftMb)->_distortion[0];
+    }//end if _intraFlag...
+  }//end if _leftMb...
+  if (mb->_aboveMb != NULL)	///< B
+  {
+    if (!(mb->_aboveMb)->_intraFlag)
+    {
+      Bx = (mb->_aboveMb)->_mvX[MacroBlockH264::_16x16];
+      By = (mb->_aboveMb)->_mvY[MacroBlockH264::_16x16];
+      Bd = (mb->_aboveMb)->_distortion[0];
+    }//end if _intraFlag...
+  }//end if _aboveMb...
+  if (mb->_aboveRightMb != NULL)	///< C
+  {
+    if (!(mb->_aboveRightMb)->_intraFlag)
+    {
+      Cx = (mb->_aboveRightMb)->_mvX[MacroBlockH264::_16x16];
+      Cy = (mb->_aboveRightMb)->_mvY[MacroBlockH264::_16x16];
+      Cd = (mb->_aboveRightMb)->_distortion[0];
+    }//end if _intraFlag...
+  }//end if _aboveRightMb...
+  else	///< Replace C with D (if D exists)
+  {
+    if (mb->_aboveLeftMb != NULL)	/// D
+    {
+      if (!(mb->_aboveLeftMb)->_intraFlag)
+      {
+        Cx = (mb->_aboveLeftMb)->_mvX[MacroBlockH264::_16x16];
+        Cy = (mb->_aboveLeftMb)->_mvY[MacroBlockH264::_16x16];
+        Cd = (mb->_aboveLeftMb)->_distortion[0];
+      }//end if _intraFlag...
+    }//end if D...
+  }//end else !C...
+
+   /// Handle the special case of !B and !C by replacing them with A.
+  if ((mb->_aboveMb == NULL) && (mb->_aboveRightMb == NULL))
+  {
+    Bx = Ax;
+    By = Ay;
+    Bd = Ad;
+    Cx = Ax;
+    Cy = Ay;
+    Cd = Ad;
+  }//end !B and !C...
+
+  /// Associate distortions with each median motion component.
+  int xd = Ad;
+  int x = mb->Median(Ax, Bx, Cx);
+  /// For mv components that are equal then choose the smallest distortion.
+  if (x == Ax) xd = Ad;
+  if ((x == Bx) && (Bd < xd)) xd = Bd;
+  if ((x == Cx) && (Cd < xd)) xd = Cd;
+/*
+  /// Make a non-exhaustive guess.
+  if (x != Ax)
+  {
+    if ((x == Bx) && (x != Cx)) xd = Bd;
+    else if ((x != Bx) && (x == Cx)) xd = Cd;
+    else if ((x == Bx) && (x == Cx)) if (Bd < Cd) xd = Bd; else xd = Cd;
+  }//end if !Ax...
+*/
+  int yd = Ad;
+  int y = mb->Median(Ay, By, Cy);
+  if (y == Ay) yd = Ad;
+  if ((y == By) && (Bd < yd)) yd = Bd;
+  if ((y == Cx) && (Cd < yd)) yd = Cd;
+
+/*
+  if (y != Ay)
+  {
+    if ((y == By) && (y != Cy)) yd = Bd;
+    else if ((y != By) && (y == Cy)) yd = Cd;
+    else if ((y == By) && (y == Cy)) if (Bd < Cd) yd = Bd; else yd = Cd;
+  }//end if !Ay...
+*/
+  *mvpx = x;
+  *mvpy = y;
+
+  /// Min between the distortions of the 2 motion components.
+  int d = xd;
+  if (yd < xd) d = yd;
+  *distortion = d;
+}//end GetMbMotionMedianPred.
+
+ /** Calc the median of 3 numbers.
 @param x	:	1st num.
 @param y	:	2nd num.
 @param z	:	3rd num.
@@ -1110,16 +1213,16 @@ int MacroBlockH264::HasNonZeroCoeffsProxy(MacroBlockH264* mb)
 }//end HasNonZeroCoeffsProxy.
 
 /** Calculate the distortion between two overlays at this mb's postion.
-Align the two lum and chr images over this mb and calculate the sum of square error for
-the three colour spaces. The image spaces must have identical width and height and match
-the mb initialisation settings. The format must be YCbCr 4:2:0 16x16:8x8:8x8.
+Align the two lum and chr images over this mb and calculate the sum of square or abs error for
+the three colour spaces. The image spaces must have identical width and height and match the mb 
+initialisation settings. The format must be YCbCr 4:2:0 16x16:8x8:8x8.
 @param  p1Y   : 1st Image lum overlay
 @param  p1Cb  : 1st Image chr overlay
 @param  p1Cr  :
 @param  p2Y   : 2nd Image lum overlay
 @param  p2Cb  : 2nd Image chr overlay
 @param  p2Cr  :
-@return       : Square error distortion
+@return       : Square/Absolute error distortion
 */
 int MacroBlockH264::Distortion(OverlayMem2Dv2* p1Y, OverlayMem2Dv2* p1Cb, OverlayMem2Dv2* p1Cr, OverlayMem2Dv2* p2Y, OverlayMem2Dv2* p2Cb, OverlayMem2Dv2* p2Cr)
 {
@@ -1141,7 +1244,11 @@ int MacroBlockH264::Distortion(OverlayMem2Dv2* p1Y, OverlayMem2Dv2* p1Cb, Overla
   p2Y->SetOverlayDim(16,16);
   p2Y->SetOrigin(_offLumX, _offLumY);
 
+#ifdef USE_ABSOLUTE_DIFFERENCE
+  distortion = p1Y->Tad16x16( *p2Y );
+#else
   distortion = p1Y->Tsd16x16( *p2Y );
+#endif
 
   p1Y->SetOverlayDim(tmp1Width,tmp1Height);
   p1Y->SetOrigin(tmp1OrgX, tmp1OrgY);
@@ -1162,8 +1269,11 @@ int MacroBlockH264::Distortion(OverlayMem2Dv2* p1Y, OverlayMem2Dv2* p1Cb, Overla
   p2Cb->SetOverlayDim(8,8);
   p2Cb->SetOrigin(_offChrX, _offChrY);
 
+#ifdef USE_ABSOLUTE_DIFFERENCE
+  distortion += p1Cb->Tad8x8( *p2Cb );
+#else
   distortion += p1Cb->Tsd8x8( *p2Cb );
-
+#endif
   p1Cb->SetOverlayDim(tmp1Width,tmp1Height);
   p1Cb->SetOrigin(tmp1OrgX, tmp1OrgY);
   p2Cb->SetOverlayDim(tmp2Width,tmp2Height);
@@ -1183,12 +1293,56 @@ int MacroBlockH264::Distortion(OverlayMem2Dv2* p1Y, OverlayMem2Dv2* p1Cb, Overla
   p2Cr->SetOverlayDim(8,8);
   p2Cr->SetOrigin(_offChrX, _offChrY);
 
+#ifdef USE_ABSOLUTE_DIFFERENCE
+  distortion += p1Cr->Tad8x8( *p2Cr );
+#else
   distortion += p1Cr->Tsd8x8( *p2Cr );
-
+#endif
   p1Cr->SetOverlayDim(tmp1Width,tmp1Height);
   p1Cr->SetOrigin(tmp1OrgX, tmp1OrgY);
   p2Cr->SetOverlayDim(tmp2Width,tmp2Height);
   p2Cr->SetOrigin(tmp2OrgX, tmp2OrgY);
+
+  return(distortion);
+}//end Distortion.
+
+/** Calculate the distortion between two overlays at this mb's postion.
+Same as above but for lum only. The image spaces must have identical width and height and match the mb 
+initialisation settings. The format must be YCbCr 4:2:0 16x16:8x8:8x8.
+@param  p1Y   : 1st Image lum overlay
+@param  p2Y   : 2nd Image lum overlay
+@return       : Square/Absolute error distortion
+*/
+int MacroBlockH264::Distortion(OverlayMem2Dv2* p1Y, OverlayMem2Dv2* p2Y)
+{
+  int distortion = 0;
+  int tmp1Width, tmp1Height, tmp1OrgX, tmp1OrgY;
+  int tmp2Width, tmp2Height, tmp2OrgX, tmp2OrgY;
+
+  /// Lum
+  tmp1Width   = p1Y->GetWidth();
+  tmp1Height  = p1Y->GetHeight();
+  tmp1OrgX    = p1Y->GetOriginX();
+  tmp1OrgY    = p1Y->GetOriginY();
+  p1Y->SetOverlayDim(16,16);
+  p1Y->SetOrigin(_offLumX, _offLumY);
+  tmp2Width   = p2Y->GetWidth();
+  tmp2Height  = p2Y->GetHeight();
+  tmp2OrgX    = p2Y->GetOriginX();
+  tmp2OrgY    = p2Y->GetOriginY();
+  p2Y->SetOverlayDim(16,16);
+  p2Y->SetOrigin(_offLumX, _offLumY);
+
+#ifdef USE_ABSOLUTE_DIFFERENCE
+  distortion = p1Y->Tad16x16( *p2Y );
+#else
+  distortion = p1Y->Tsd16x16( *p2Y );
+#endif
+
+  p1Y->SetOverlayDim(tmp1Width,tmp1Height);
+  p1Y->SetOrigin(tmp1OrgX, tmp1OrgY);
+  p2Y->SetOverlayDim(tmp2Width,tmp2Height);
+  p2Y->SetOrigin(tmp2OrgX, tmp2OrgY);
 
   return(distortion);
 }//end Distortion.

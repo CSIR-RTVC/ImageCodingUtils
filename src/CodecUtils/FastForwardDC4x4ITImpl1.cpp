@@ -51,6 +51,7 @@ RESTRICTIONS	: Redistribution and use in source and binary forms, with or withou
 #endif
 
 #include <string.h>
+#include <math.h>
 #include "FastForwardDC4x4ITImpl1.h"
 
 /*
@@ -255,5 +256,30 @@ int FastForwardDC4x4ITImpl1::GetParameter(int paramID)
 
 	return(ret);
 }//end GetParameter.
+
+/** Quantise a single value in a block.
+Implement quantising a value in a specified position of the coeffs at a
+specified QP value.
+@param val  : Value to quantise.
+@param pos  : Postion of value in 1-D array of 2-D data.
+@param qp   : Quant param to use.
+@return     : Result of quantisation.
+*/
+int FastForwardDC4x4ITImpl1::QuantiseValue(short val, int pos, int qp)
+{
+  _q = qp;
+	_qm			= qp % 6;
+	_qe			= qp/6;
+  _f			= 2 * ((1 << (15+_qe))/3);
+	_scale	= 16 + _qe;
+
+  short quantVal = 0;
+	if( val < 0 )
+		quantVal = (short)(-( (((-val) * NormAdjust[_qm]) + _f) >> _scale ));
+	else
+		quantVal = (short)( ((val * NormAdjust[_qm]) + _f) >> _scale );
+
+  return((int)quantVal);
+}//end QuantiseValue. 
 
 

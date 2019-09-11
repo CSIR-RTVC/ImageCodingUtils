@@ -102,6 +102,16 @@ public:
 	virtual void	SetParameter(int paramID, int paramVal) = 0;
 	virtual int		GetParameter(int paramID) = 0;
 
+  /** Quantise a single value in a block.
+  Implement quantising a value in a specified position of the coeffs at a
+  specified QP value.
+  @param val  : Value to quantise.
+  @param pos  : Postion of value in 1-D array of 2-D data.
+  @param qp   : Quant param to use.
+  @return     : Result of quantisation.
+  */
+  virtual int QuantiseValue(short val, int pos, int qp) = 0;
+
 	/// Global constants for all implementations.
 public:
 
