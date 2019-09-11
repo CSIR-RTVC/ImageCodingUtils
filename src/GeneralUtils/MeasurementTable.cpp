@@ -164,7 +164,7 @@ void MeasurementTable::Destroy(void)
 	_rows    = 0;
 }//end Destroy.
 
-int	MeasurementTable::Save(char* filename, char* delimiter, int withHeadings)
+int	MeasurementTable::Save(const char* filename, const char* delimiter, int withHeadings)
 {
 	int col, row;
 

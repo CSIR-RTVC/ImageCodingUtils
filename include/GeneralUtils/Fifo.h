@@ -84,11 +84,11 @@ public:
         _sum += x;  ///< Add the newest item.
       }//end if !_empty 
       else         
-      { 
-        for(int i = 0; i < _length; i++) 
-          _pBuff[i] = x; 
-        _empty = 0;
+      {
         _sum = x * (double)_length;
+        for (int i = 0; i < _length; i++)
+          _pBuff[i] = x;
+        _empty = 0;
       }//end else...
     }//end if _pBuff...
   }//end AddFirstIn.

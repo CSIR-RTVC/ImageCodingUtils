@@ -60,7 +60,7 @@ public:
 public:
 	int		Create(int columns, int rows);
 	void	Destroy(void);
-	int		Save(char* filename, char* delimiter, int withHeadings);
+	int		Save(const char* filename, const char* delimiter, int withHeadings);
 
 	virtual void		WriteItem(int col, int row, int x)		{ _ppTable[row][col] = (double)x; }
 	virtual void		WriteItem(int col, int row, double x) { _ppTable[row][col] = x; }
