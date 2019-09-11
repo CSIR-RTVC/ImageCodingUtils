@@ -50,14 +50,15 @@ class RealYUV444toRGB24Converter: public YUV444toRGBConverter
 public:
   // Construction and destruction.
   RealYUV444toRGB24Converter(void) { }
-  RealYUV444toRGB24Converter(int width, int height): YUV444toRGBConverter(width, height) { }
-  virtual ~RealYUV444toRGB24Converter(void) { }
+  RealYUV444toRGB24Converter(int width, int height): YUV444toRGBConverter(width,height) { }
+  virtual ~RealYUV444toRGB24Converter(void) {}
 
   // Interface.
   virtual void Convert(void* pInputBuffer, void* pRgb);
+
+
 
 };//end RealYUV444toRGB24Converter.
 
 
 #endif	// _REALYUV444TORGB24CONVERTER_H
-

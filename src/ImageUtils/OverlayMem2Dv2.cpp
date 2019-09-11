@@ -56,6 +56,18 @@ RESTRICTIONS	: Redistribution and use in source and binary forms, with or withou
 #include <stdlib.h>
 
 #include "OverlayMem2Dv2.h"
+#include "MeasurementTable.h" 
+
+/*
+---------------------------------------------------------------------------
+Struct definition.
+---------------------------------------------------------------------------
+*/
+typedef struct _OM2DV2_COORD
+{
+  short int x;
+  short int y;
+} OM2DV2_COORD;
 
 /*
 ---------------------------------------------------------------------------
@@ -76,6 +88,14 @@ int OverlayMem2Dv2::OM2DV2_Tp[17] = {0, 0, 2, 0, 2, 1, 3, 1, 3, 0, 2, 1, 3, 0, 2
 #define OM2DV2_FAST_ABS16(x) ( ((x)^((x)>>15))-((x)>>15) )
 
 #define OM2DV2_CLIP255(x)	( (((x) <= 255)&&((x) >= 0))? (x) : ( ((x) < 0)? 0:255 ) )
+
+#define OM2DV2_6TAP(minus3, minus2, minus1, plus1, plus2, plus3) ( (minus3) - 5*(minus2) + 20*(minus1) + 20*(plus1) - 5*(plus2) + (plus3) )
+#define OM2DV2_VERT_6TAP(ptr, x, y)  ( OM2DV2_6TAP((int)((ptr)[(y)-2][(x)]), (int)((ptr)[(y)-1][(x)]), (int)((ptr)[(y)][(x)]), (int)((ptr)[(y)+1][(x)]), (int)((ptr)[(y)+2][(x)]), (int)((ptr)[(y)+3][(x)])) )
+#define OM2DV2_HORIZ_6TAP(ptr, x, y) ( OM2DV2_6TAP((int)((ptr)[(y)][(x)-2]), (int)((ptr)[(y)][(x)-1]), (int)((ptr)[(y)][(x)]), (int)((ptr)[(y)][(x)+1]), (int)((ptr)[(y)][(x)+2]), (int)((ptr)[(y)][(x)+3])) )
+
+#define OM2DV2_GET_J(ptr, x, y) ((OM2DV2_6TAP(OM2DV2_VERT_6TAP((ptr),(x)-2,(y)), OM2DV2_VERT_6TAP((ptr),(x)-1,(y)), OM2DV2_VERT_6TAP((ptr),(x),(y)), OM2DV2_VERT_6TAP((ptr),(x)+1,(y)), OM2DV2_VERT_6TAP((ptr),(x)+2,(y)), OM2DV2_VERT_6TAP((ptr),(x)+3,(y))) + 512) >> 10)
+#define OM2DV2_GET_B(ptr, x, y)   ((OM2DV2_HORIZ_6TAP((ptr),(x),(y)) + 16) >> 5)
+#define OM2DV2_GET_H(ptr, x, y)   ((OM2DV2_VERT_6TAP((ptr),(x),(y)) + 16) >> 5)
 
 /*
 ---------------------------------------------------------------------------
@@ -684,7 +704,7 @@ need to be valid for the 1/4 calculation.
 void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, int quarterColOff,	int quarterRowOff)
 {
 	short**	pLcl = dstBlock.Get2DSrcPtr();
-	int	row,col,srcRow,dstRow;
+	int	row, col, srcRow, dstRow;
 
 	/// Offsets are only positive numbers from the top left position so all -ve offsets are reflected
 	/// to full pel locations to the left or above the current block position.
@@ -717,13 +737,9 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 					for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
 					{
 						int lclOffX = srcCol + fullOffX;
+            int b = OM2DV2_GET_B(me._pBlock, lclOffX, lclOffY);
 
-						int b =		 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-										5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3];
-
-						int x = (b + 16) >> 5;
-						pLcl[dstRow][dstCol] = (short)OM2DV2_CLIP255(x);
+						pLcl[dstRow][dstCol] = (short)OM2DV2_CLIP255(b);
 					}//end for col...
 				}//end for row...
 			}
@@ -737,13 +753,9 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 					for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
 					{
 						int lclOffX = srcCol + fullOffX;
+            int h = OM2DV2_GET_H(me._pBlock, lclOffX, lclOffY);
 
-						int h =		 (int)me._pBlock[lclOffY-2][lclOffX] -  5*(int)me._pBlock[lclOffY-1][lclOffX] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY+1][lclOffX] -
-										5*(int)me._pBlock[lclOffY+2][lclOffX]  +    (int)me._pBlock[lclOffY+3][lclOffX];
-
-						int x = (h + 16) >> 5;
-						pLcl[dstRow][dstCol] = (short)OM2DV2_CLIP255(x);
+						pLcl[dstRow][dstCol] = (short)OM2DV2_CLIP255(h);
 					}//end for col...
 				}//end for row...
 			}
@@ -753,24 +765,13 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 				for(row = 0, srcRow = me._yPos, dstRow = dstBlock._yPos; row < me._height; row++, srcRow++, dstRow++)
 				{
 					int srcCol,dstCol;
-					for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
+          int lclOffY = srcRow + fullOffY;
+          for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
 					{
-						int lclOffY = srcRow + fullOffY - 2;
-						int lclOffX = srcCol + fullOffX;
-						int lclTemp[6];
+            int lclOffX = srcCol + fullOffX;
+            int j = OM2DV2_GET_J(me._pBlock, lclOffX, lclOffY);
 
-						/// Step through 6 rows to produce the temp intermediate values of aa, bb, b, s, gg, hh into lclTmp[].
-						for(int tmp = 0; tmp < 6; tmp++, lclOffY++)
-						{
-							lclTemp[tmp] =		 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-															20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-															5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3];
-						}//end for tmp...
-
-						int j = lclTemp[0] - 5*lclTemp[1] + 20*lclTemp[2] + 20*lclTemp[3] - 5*lclTemp[4] + lclTemp[5];
-
-						int x = (j + 512) >> 10;
-						pLcl[dstRow][dstCol] = (short)OM2DV2_CLIP255(x);
+						pLcl[dstRow][dstCol] = (short)OM2DV2_CLIP255(j);
 					}//end for col...
 				}//end for row...
 			}
@@ -784,10 +785,7 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 					for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
 					{
 						int lclOffX = srcCol + fullOffX;
-
-						int b =	(	 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-										5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3] + 16) >> 5;
+            int b = OM2DV2_GET_B(me._pBlock, lclOffX, lclOffY);
 
 						int a = ((int)me._pBlock[lclOffY][lclOffX] + OM2DV2_CLIP255(b) + 1) >> 1;
 
@@ -805,10 +803,7 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 					for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
 					{
 						int lclOffX = srcCol + fullOffX;
-
-						int b =	(	 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-										5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3] + 16) >> 5;
+            int b = OM2DV2_GET_B(me._pBlock, lclOffX, lclOffY);
 
 						int c = ((int)me._pBlock[lclOffY][lclOffX+1] + OM2DV2_CLIP255(b) + 1) >> 1;
 
@@ -826,10 +821,7 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 					for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
 					{
 						int lclOffX = srcCol + fullOffX;
-
-						int h =	(	 (int)me._pBlock[lclOffY-2][lclOffX] -  5*(int)me._pBlock[lclOffY-1][lclOffX] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY+1][lclOffX] -
-										5*(int)me._pBlock[lclOffY+2][lclOffX]  +    (int)me._pBlock[lclOffY+3][lclOffX] + 16) >> 5;
+            int h = OM2DV2_GET_H(me._pBlock, lclOffX, lclOffY);
 
 						int d = ((int)me._pBlock[lclOffY][lclOffX] + OM2DV2_CLIP255(h) + 1) >> 1;
 
@@ -847,10 +839,7 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 					for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
 					{
 						int lclOffX = srcCol + fullOffX;
-
-						int h =	(	 (int)me._pBlock[lclOffY-2][lclOffX] -  5*(int)me._pBlock[lclOffY-1][lclOffX] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY+1][lclOffX] -
-										5*(int)me._pBlock[lclOffY+2][lclOffX]  +    (int)me._pBlock[lclOffY+3][lclOffX] + 16) >> 5;
+            int h = OM2DV2_GET_H(me._pBlock, lclOffX, lclOffY);
 
 						int n = ((int)me._pBlock[lclOffY+1][lclOffX] + OM2DV2_CLIP255(h) + 1) >> 1;
 
@@ -864,25 +853,12 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 				for(row = 0, srcRow = me._yPos, dstRow = dstBlock._yPos; row < me._height; row++, srcRow++, dstRow++)
 				{
 					int srcCol,dstCol;
-					for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
+          int lclOffY = srcRow + fullOffY;
+          for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
 					{
-						int lclOffY = srcRow + fullOffY - 2;
-						int lclOffX = srcCol + fullOffX;
-						int lclTemp[6];
-
-						/// Step through 6 rows to produce the temp intermediate values of aa, bb, b, s, gg, hh into lclTmp[].
-						for(int tmp = 0; tmp < 6; tmp++, lclOffY++)
-						{
-							lclTemp[tmp] =		 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-															20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-															5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3];
-						}//end for tmp...
-						int j = (lclTemp[0] - 5*lclTemp[1] + 20*lclTemp[2] + 20*lclTemp[3] - 5*lclTemp[4] + lclTemp[5] + 512) >> 10;
-
-						lclOffY = srcRow + fullOffY;
-						int b =	(	 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-										5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3] + 16) >> 5;
+            int lclOffX = srcCol + fullOffX;
+            int j = OM2DV2_GET_J(me._pBlock, lclOffX, lclOffY);
+            int b = OM2DV2_GET_B(me._pBlock, lclOffX, lclOffY);
 
 						int f = (OM2DV2_CLIP255(j) + OM2DV2_CLIP255(b) + 1) >> 1;
 
@@ -898,23 +874,11 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 					int srcCol,dstCol;
 					for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
 					{
-						int lclOffY = srcRow + fullOffY - 2;
-						int lclOffX = srcCol + fullOffX;
-						int lclTemp[6];
-
-						/// Step through 6 rows to produce the temp intermediate values of aa, bb, b, s, gg, hh into lclTmp[].
-						for(int tmp = 0; tmp < 6; tmp++, lclOffY++)
-						{
-							lclTemp[tmp] =		 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-															20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-															5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3];
-						}//end for tmp...
-						int j = (lclTemp[0] - 5*lclTemp[1] + 20*lclTemp[2] + 20*lclTemp[3] - 5*lclTemp[4] + lclTemp[5] + 512) >> 10;
-
-						lclOffY = srcRow + fullOffY + 1;
-						int s =	(	 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-										5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3] + 16) >> 5;
+            int lclOffY = srcRow + fullOffY;
+            int lclOffX = srcCol + fullOffX;
+            int j = OM2DV2_GET_J(me._pBlock, lclOffX, lclOffY);
+						lclOffY++;
+            int s = OM2DV2_GET_B(me._pBlock, lclOffX, lclOffY); ///< "s" is a "b" for the row below. 
 
 						int q = (OM2DV2_CLIP255(j) + OM2DV2_CLIP255(s) + 1) >> 1;
 
@@ -928,25 +892,12 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 				for(row = 0, srcRow = me._yPos, dstRow = dstBlock._yPos; row < me._height; row++, srcRow++, dstRow++)
 				{
 					int srcCol,dstCol;
-					for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
+          int lclOffY = srcRow + fullOffY;
+          for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
 					{
-						int lclOffY = srcRow + fullOffY - 2;
-						int lclOffX = srcCol + fullOffX;
-						int lclTemp[6];
-
-						/// Step through 6 rows to produce the temp intermediate values of aa, bb, b, s, gg, hh into lclTmp[].
-						for(int tmp = 0; tmp < 6; tmp++, lclOffY++)
-						{
-							lclTemp[tmp] =		 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-															20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-															5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3];
-						}//end for tmp...
-						int j = (lclTemp[0] - 5*lclTemp[1] + 20*lclTemp[2] + 20*lclTemp[3] - 5*lclTemp[4] + lclTemp[5] + 512) >> 10;
-
-						lclOffY = srcRow + fullOffY;
-						int h =	(	 (int)me._pBlock[lclOffY-2][lclOffX] -  5*(int)me._pBlock[lclOffY-1][lclOffX] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY+1][lclOffX] -
-										 5*(int)me._pBlock[lclOffY+2][lclOffX] +    (int)me._pBlock[lclOffY+3][lclOffX] + 16) >> 5;
+            int lclOffX = srcCol + fullOffX;
+            int j = OM2DV2_GET_J(me._pBlock, lclOffX, lclOffY);
+            int h = OM2DV2_GET_H(me._pBlock, lclOffX, lclOffY);
 
 						int i = (OM2DV2_CLIP255(j) + OM2DV2_CLIP255(h) + 1) >> 1;
 
@@ -960,26 +911,13 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 				for(row = 0, srcRow = me._yPos, dstRow = dstBlock._yPos; row < me._height; row++, srcRow++, dstRow++)
 				{
 					int srcCol,dstCol;
-					for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
+          int lclOffY = srcRow + fullOffY;
+          for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
 					{
-						int lclOffY = srcRow + fullOffY - 2;
-						int lclOffX = srcCol + fullOffX;
-						int lclTemp[6];
-
-						/// Step through 6 rows to produce the temp intermediate values of aa, bb, b, s, gg, hh into lclTmp[].
-						for(int tmp = 0; tmp < 6; tmp++, lclOffY++)
-						{
-							lclTemp[tmp] =		 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-															20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-															5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3];
-						}//end for tmp...
-						int j = (lclTemp[0] - 5*lclTemp[1] + 20*lclTemp[2] + 20*lclTemp[3] - 5*lclTemp[4] + lclTemp[5] + 512) >> 10;
-
-						lclOffY = srcRow + fullOffY;
+            int lclOffX = srcCol + fullOffX;
+            int j = OM2DV2_GET_J(me._pBlock, lclOffX, lclOffY);
 						lclOffX++;
-						int m =	(	 (int)me._pBlock[lclOffY-2][lclOffX] -  5*(int)me._pBlock[lclOffY-1][lclOffX] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY+1][lclOffX] -
-										 5*(int)me._pBlock[lclOffY+2][lclOffX] +    (int)me._pBlock[lclOffY+3][lclOffX] + 16) >> 5;
+            int m = OM2DV2_GET_H(me._pBlock, lclOffX, lclOffY); ///< "m" is an "h" in the next col.
 
 						int k = (OM2DV2_CLIP255(j) + OM2DV2_CLIP255(m) + 1) >> 1;
 
@@ -997,14 +935,8 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 					for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
 					{
 						int lclOffX = srcCol + fullOffX;
-
-						int b =	(	 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-										5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3]+ 16) >> 5;
-
-						int h =	(	 (int)me._pBlock[lclOffY-2][lclOffX] -  5*(int)me._pBlock[lclOffY-1][lclOffX] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY+1][lclOffX] -
-										 5*(int)me._pBlock[lclOffY+2][lclOffX] +    (int)me._pBlock[lclOffY+3][lclOffX] + 16) >> 5;
+            int b = OM2DV2_GET_B(me._pBlock, lclOffX, lclOffY);
+            int h = OM2DV2_GET_H(me._pBlock, lclOffX, lclOffY);
 
 						int e = (OM2DV2_CLIP255(b) + OM2DV2_CLIP255(h) + 1) >> 1;
 
@@ -1022,15 +954,9 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 					for(col = 0, srcCol = me._xPos, dstCol = dstBlock._xPos; col < me._width; col++, srcCol++, dstCol++)
 					{
 						int lclOffX = srcCol + fullOffX;
-
-						int b =	(	 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-										5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3]+ 16) >> 5;
-
+            int b = OM2DV2_GET_B(me._pBlock, lclOffX, lclOffY);
 						lclOffX++;
-						int m =	(	 (int)me._pBlock[lclOffY-2][lclOffX] -  5*(int)me._pBlock[lclOffY-1][lclOffX] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY+1][lclOffX] -
-										 5*(int)me._pBlock[lclOffY+2][lclOffX] +    (int)me._pBlock[lclOffY+3][lclOffX] + 16) >> 5;
+            int m = OM2DV2_GET_H(me._pBlock, lclOffX, lclOffY); ///< "m" is an "h" in the next col.
 
 						int g = (OM2DV2_CLIP255(b) + OM2DV2_CLIP255(m) + 1) >> 1;
 
@@ -1049,15 +975,9 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 					{
 						int lclOffY = srcRow + fullOffY;
 						int lclOffX = srcCol + fullOffX;
-
-						int h =	(	 (int)me._pBlock[lclOffY-2][lclOffX] -  5*(int)me._pBlock[lclOffY-1][lclOffX] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY+1][lclOffX] -
-										 5*(int)me._pBlock[lclOffY+2][lclOffX] +    (int)me._pBlock[lclOffY+3][lclOffX] + 16) >> 5;
-
+            int h = OM2DV2_GET_H(me._pBlock, lclOffX, lclOffY);
 						lclOffY++;
-						int s =	(	 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-										5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3]+ 16) >> 5;
+            int s = OM2DV2_GET_B(me._pBlock, lclOffX, lclOffY); ///< "s" is a "b" for the row below. 
 
 						int p = (OM2DV2_CLIP255(h) + OM2DV2_CLIP255(s) + 1) >> 1;
 
@@ -1076,16 +996,10 @@ void OverlayMem2Dv2::QuarterRead(OverlayMem2Dv2& me, OverlayMem2Dv2& dstBlock, i
 					{
 						int lclOffY = srcRow + fullOffY;
 						int lclOffX = srcCol + fullOffX + 1;
-
-						int m =	(	 (int)me._pBlock[lclOffY-2][lclOffX] -  5*(int)me._pBlock[lclOffY-1][lclOffX] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY+1][lclOffX] -
-										 5*(int)me._pBlock[lclOffY+2][lclOffX] +    (int)me._pBlock[lclOffY+3][lclOffX] + 16) >> 5;
-
+            int m = OM2DV2_GET_H(me._pBlock, lclOffX, lclOffY); ///< "m" is an "h" in the next col.
 						lclOffY++;
 						lclOffX--;
-						int s =	(	 (int)me._pBlock[lclOffY][lclOffX-2] -  5*(int)me._pBlock[lclOffY][lclOffX-1] +
-										20*(int)me._pBlock[lclOffY][lclOffX]   + 20*(int)me._pBlock[lclOffY][lclOffX+1] -
-										5*(int)me._pBlock[lclOffY][lclOffX+2]  +    (int)me._pBlock[lclOffY][lclOffX+3]+ 16) >> 5;
+            int s = OM2DV2_GET_B(me._pBlock, lclOffX, lclOffY); ///< "s" is a "b" for the row below. 
 
 						int r = (OM2DV2_CLIP255(m) + OM2DV2_CLIP255(s) + 1) >> 1;
 
@@ -2011,84 +1925,55 @@ int OverlayMem2Dv2::Tsd16x16LessThan(OverlayMem2Dv2& me, OverlayMem2Dv2& b, int 
 	short**	bPtr	= b.Get2DSrcPtr();
 	short*	pP;
 	short*	pI;
-	int			acc		= 0;
-	for(int row = 0; row < 16; row++)
+  int			acc	  = 0;
+  for(int row = 0; row < 16; row++)
 	{
 		pP = &(me._pBlock[me._yPos + row][me._xPos]);
-		pI = &(bPtr[b._yPos + row][b._xPos]);
+    pI = &(bPtr[b._yPos + row][b._xPos]);
 
 #ifdef OM2DV2_UNROLL_INNER_LOOP
 		// [row][0]
-    int diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);	// Early exit because exceeded min.
+    int diff = *(pP++) - *(pI++);	acc += (diff * diff);
 		// [row][1]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
 		// [row][2]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
 		// [row][3]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
-		// [row][4]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
+    if (acc > min)	return(acc);  // Early exit because exceeded min.
+    // [row][4]
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
 		// [row][5]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
 		// [row][6]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
 		// [row][7]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
+		if(acc > min)	return(acc);  // Early exit because exceeded min.
 		// [row][8]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
 		// [row][9]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
 		// [row][10]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
 		// [row][11]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
-		// [row][12]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
+    if (acc > min)	return(acc);  // Early exit because exceeded min.
+    // [row][12]
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
 		// [row][13]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
 		// [row][14]
-    diff = *(pP++) - *(pI++);
-		acc += (diff * diff);
-		if(acc > min)	return(acc);
+    diff = *(pP++) - *(pI++);	acc += (diff * diff);
 		// [row][15]
-    diff = *(pP) - *(pI);
-		acc += (diff * diff);
+    diff = *(pP) - *(pI);	acc += (diff * diff);
+    if (acc > min)	return(acc);
 
 #else
-		for(int col = 0; col < 16; col++)
+		for(int col = 0; (col < 16)&&(acc <= min); col++)
 		{
       int diff = *(pP++) - *(pI++);
 			acc += (diff * diff);
-			if(acc > min)
-				return(acc);	// Early exit because exceeded min.
 		}//end for col...
 #endif	// OM2DV2_UNROLL_INNER_LOOP
 
@@ -2134,7 +2019,505 @@ int OverlayMem2Dv2::Tsd16x16PartialLessThan(OverlayMem2Dv2& me, OverlayMem2Dv2& 
 	return(Dp);
 }//end Tsd16x16PartialLessThan.
 
-/** Calc the total absolute difference with the input block.
+ /** The total square difference with 16x16 blocks to improve on input value with a partial path.
+ Exit early if the partial accumulated square error becomes larger than the specified
+ normalised input value along a path of coordinates. The block dimensions must be 16x16 
+ and no checking is done. Use with caution for speed.
+ @param b		  : 16x16 input block.
+ @param path  : Two-Dim path of array type OM2DV2_COORD.
+ @param len   : Length of path to check <= 16x16=256.
+ @param min	  :	The min value to improve on.
+ @return		  : Total square error to the point of early exit.
+ */
+int OverlayMem2Dv2::Tsd16x16PartialPathLessThan(OverlayMem2Dv2& me, OverlayMem2Dv2& b, void* path, int len, int min)
+{
+  short**	bPtr = b.Get2DSrcPtr();
+  OM2DV2_COORD* pPath = (OM2DV2_COORD *)path;
+
+  int Dp = 0;	///< Accumulated partial square error.
+
+  for (int p = 0; (p < len) && (Dp <= min); ) ///< Early exit if Dp exceeded min.
+  {
+    int pX = (int)pPath[p].x; int pY = (int)pPath[p].y; p++;
+    int diff = (int)me._pBlock[me._yPos + pY][me._xPos + pX] - (int)bPtr[b._yPos + pY][b._xPos + pX];
+    Dp += (diff * diff);	///< pth partial sqr err.
+
+    int pX2 = (int)pPath[p].x; int pY2 = (int)pPath[p].y; p++;
+    int diff2 = (int)me._pBlock[me._yPos + pY2][me._xPos + pX2] - (int)bPtr[b._yPos + pY2][b._xPos + pX2];
+    Dp += (diff2 * diff2);	///< pth partial sqr err.
+  }//end for p...
+/*
+  for (int p = 0; (p < len)&&(Dp <= min); p++) ///< Early exit if Dp exceeded min.
+  {
+    int pX = (int)pPath[p].x;
+    int pY = (int)pPath[p].y;
+    int diff = (int)me._pBlock[me._yPos + pY][me._xPos + pX] - (int)bPtr[b._yPos + pY][b._xPos + pX];
+    Dp += (diff * diff);	///< pth partial sqr err.
+  }//end for p...
+*/
+  return(Dp);
+}//end Tsd16x16PartialPathLessThan.
+
+/** The total square difference with 16x16 blocks to improve on input value with a partial path.
+Exit early if the predicted square error becomes larger than the specified normalised input value 
+along an optimal path of coordinates. The optimal path is an input and is processed in batches. 
+The block dimensions must be 16x16 and no checking is done. Use with caution for speed.
+@param b		  : 16x16 input block.
+@param path   : Two-Dim path of array type OM2DV2_COORD.
+@param min	  :	The min value to improve on.
+@return		    : Total predicted square error using the point of early exit.
+*/
+int OverlayMem2Dv2::Tsd16x16OptimalPathLessThan(OverlayMem2Dv2& me, OverlayMem2Dv2& b, void* path, int min)
+{
+  OM2DV2_COORD* pPath = (OM2DV2_COORD *)path;
+  short**	bPtr        = b.Get2DSrcPtr();
+  int meY = me._yPos; int meX = me._xPos;
+  int bY  = b._yPos;  int bX  = b._xPos;
+
+//  int upperThresh2p, lowerThresh2p;
+  int Dp      = 0;  ///< Accumulated partial square error.
+  int predD   = 0;  ///< Linear 'y=x' prediction of path distortion.
+  int pathPos = 0;
+
+  /// The path length is implicit and is a max of 256. All decisions are made after a batch of 16 path
+  /// locations at a time.
+  for (int batch = 0; batch < 5; batch++)   ///< 5 batches of 16 = 80 path locations.
+  {
+    for (int p = 0; p < 4; p++)  /// Accumulate 1 batch of the next 16 locations in an unrolled loop.
+    {
+      int pX1 = (int)pPath[pathPos].x; int pY1 = (int)pPath[pathPos].y; pathPos++;  ///< [0]
+      int diff1 = (int)me._pBlock[meY + pY1][meX + pX1] - (int)bPtr[bY + pY1][bX + pX1]; Dp += (diff1 * diff1);	///< partial sqr err.
+
+      int pX2 = (int)pPath[pathPos].x; int pY2 = (int)pPath[pathPos].y; pathPos++;  ///< [1]
+      int diff2 = (int)me._pBlock[meY + pY2][meX + pX2] - (int)bPtr[bY + pY2][bX + pX2]; Dp += (diff2 * diff2);
+
+      int pX3 = (int)pPath[pathPos].x; int pY3 = (int)pPath[pathPos].y; pathPos++;  ///< [2]
+      int diff3 = (int)me._pBlock[meY + pY3][meX + pX3] - (int)bPtr[bY + pY3][bX + pX3]; Dp += (diff3 * diff3);
+
+      int pX4 = (int)pPath[pathPos].x; int pY4 = (int)pPath[pathPos].y; pathPos++;  ///< [3]
+      int diff4 = (int)me._pBlock[meY + pY4][meX + pX4] - (int)bPtr[bY + pY4][bX + pX4]; Dp += (diff4 * diff4);
+    }//end for p...
+
+    /// Predict the final result for the full 256 path locations.
+    predD = (Dp << 8) / pathPos;
+    if (predD > min) 
+      break;
+  }//end for batch...
+
+  return(predD);
+}//end Tsd16x16OptimalPathLessThan...
+
+/** The total square difference with 16x16 blocks to improve on input value with a partial path.
+Exit early if the partial accumulated square error becomes larger than the specified
+normalised input value along an optimal path of coordinates. The path is hard coded and 
+unrolled into 256 comparisons. The block dimensions must be 16x16 and no checking is 
+done. Use with caution for speed.
+@param b		  : 16x16 input block.
+@param min	  :	The min value to improve on.
+@return		    : Total predicted square error using the point of early exit.
+*/
+int OverlayMem2Dv2::Tsd16x16OptimalPathLessThan(OverlayMem2Dv2& me, OverlayMem2Dv2& b, int min)
+{
+  short**	bPtr = b.Get2DSrcPtr();
+  int meY = me._yPos; int meX = me._xPos;
+  int bY  = b._yPos;  int bX  = b._xPos;
+
+  int diff1, diff2;
+  int Dp    = 0;  ///< Accumulated partial square error.
+  int predD = 0;  ///< Linear 'y=x' prediction of path distortion.
+//  int upperThresh2p, lowerThresh2p;
+
+  /// Process 16 path locations at a time before an early exit check. Also early exit on less than 2% change in prediction.
+  /// 0
+  diff1 = (int)me._pBlock[meY + 10][meX +  5] - (int)bPtr[bY + 10][bX +  5]; Dp += (diff1 * diff1); ///< {  5,10 }
+  diff2 = (int)me._pBlock[meY +  5][meX + 13] - (int)bPtr[bY +  5][bX + 13]; Dp += (diff2 * diff2); ///< { 13, 5 }
+  diff1 = (int)me._pBlock[meY +  1][meX +  2] - (int)bPtr[bY +  1][bX +  2]; Dp += (diff1 * diff1); ///< {  2, 1 }
+  diff2 = (int)me._pBlock[meY + 14][meX + 13] - (int)bPtr[bY + 14][bX + 13]; Dp += (diff2 * diff2); ///< { 13,14 }
+  diff1 = (int)me._pBlock[meY + 14][meX +  1] - (int)bPtr[bY + 14][bX +  1]; Dp += (diff1 * diff1); ///< {  1,14 }
+  diff2 = (int)me._pBlock[meY +  1][meX +  9] - (int)bPtr[bY +  1][bX +  9]; Dp += (diff2 * diff2); ///< {  9, 1 }
+  diff1 = (int)me._pBlock[meY +  6][meX +  1] - (int)bPtr[bY +  6][bX +  1]; Dp += (diff1 * diff1); ///< {  1, 6 }
+  diff2 = (int)me._pBlock[meY +  9][meX + 15] - (int)bPtr[bY +  9][bX + 15]; Dp += (diff2 * diff2); ///< { 15, 9 }
+  /// 8
+  diff1 = (int)me._pBlock[meY + 13][meX +  8] - (int)bPtr[bY + 13][bX +  8]; Dp += (diff1 * diff1); ///< {  8,13 }
+  diff2 = (int)me._pBlock[meY +  2][meX + 14] - (int)bPtr[bY +  2][bX + 14]; Dp += (diff2 * diff2); ///< { 14, 2 }
+  diff1 = (int)me._pBlock[meY +  4][meX +  7] - (int)bPtr[bY +  4][bX +  7]; Dp += (diff1 * diff1); ///< {  7, 4 }
+  diff2 = (int)me._pBlock[meY +  8][meX + 10] - (int)bPtr[bY +  8][bX + 10]; Dp += (diff2 * diff2); ///< { 10, 8 }
+  diff1 = (int)me._pBlock[meY + 15][meX +  4] - (int)bPtr[bY + 15][bX +  4]; Dp += (diff1 * diff1); ///< {  4,15 }
+  diff2 = (int)me._pBlock[meY + 10][meX +  0] - (int)bPtr[bY + 10][bX +  0]; Dp += (diff2 * diff2); ///< {  0,10 }
+  diff1 = (int)me._pBlock[meY +  3][meX +  0] - (int)bPtr[bY +  3][bX +  0]; Dp += (diff1 * diff1); ///< {  0, 3 }
+  diff2 = (int)me._pBlock[meY +  0][meX +  5] - (int)bPtr[bY +  0][bX +  5]; Dp += (diff2 * diff2); ///< {  5, 0 }
+//  predD = Dp * 16;  if (predD > min) return(predD);
+  /// 16
+  diff1 = (int)me._pBlock[meY + 11][meX + 12] - (int)bPtr[bY + 11][bX + 12]; Dp += (diff1 * diff1); ///< { 12,11 }
+  diff2 = (int)me._pBlock[meY +  7][meX +  4] - (int)bPtr[bY +  7][bX +  4]; Dp += (diff2 * diff2); ///< {  4, 7 }
+  diff1 = (int)me._pBlock[meY +  0][meX + 12] - (int)bPtr[bY +  0][bX + 12]; Dp += (diff1 * diff1); ///< { 12, 0 }
+  diff2 = (int)me._pBlock[meY + 14][meX + 10] - (int)bPtr[bY + 14][bX + 10]; Dp += (diff2 * diff2); ///< { 10,14 }
+  diff1 = (int)me._pBlock[meY + 12][meX +  3] - (int)bPtr[bY + 12][bX +  3]; Dp += (diff1 * diff1); ///< {  3,12 }
+  diff2 = (int)me._pBlock[meY +  5][meX + 10] - (int)bPtr[bY +  5][bX + 10]; Dp += (diff2 * diff2); ///< { 10, 5 }
+  diff1 = (int)me._pBlock[meY + 13][meX + 15] - (int)bPtr[bY + 13][bX + 15]; Dp += (diff1 * diff1); ///< { 15,13 }
+  diff2 = (int)me._pBlock[meY +  3][meX +  4] - (int)bPtr[bY +  3][bX +  4]; Dp += (diff2 * diff2); ///< {  4, 3 }
+//  predD = Dp * 256/24;  if (predD > min) return(predD);
+  /// 24
+  diff1 = (int)me._pBlock[meY +  8][meX +  7] - (int)bPtr[bY +  8][bX +  7]; Dp += (diff1 * diff1); ///< {  7, 8 }
+  diff2 = (int)me._pBlock[meY +  7][meX + 14] - (int)bPtr[bY +  7][bX + 14]; Dp += (diff2 * diff2); ///< { 14, 7 }
+  diff1 = (int)me._pBlock[meY + 13][meX +  6] - (int)bPtr[bY + 13][bX +  6]; Dp += (diff1 * diff1); ///< {  6,13 }
+  diff2 = (int)me._pBlock[meY +  3][meX + 11] - (int)bPtr[bY +  3][bX + 11]; Dp += (diff2 * diff2); ///< { 11, 3 }
+  diff1 = (int)me._pBlock[meY +  9][meX +  2] - (int)bPtr[bY +  9][bX +  2]; Dp += (diff1 * diff1); ///< {  2, 9 }
+  diff2 = (int)me._pBlock[meY + 10][meX +  9] - (int)bPtr[bY + 10][bX +  9]; Dp += (diff2 * diff2); ///< {  9,10 }
+  diff1 = (int)me._pBlock[meY +  1][meX + 15] - (int)bPtr[bY +  1][bX + 15]; Dp += (diff1 * diff1); ///< { 15, 1 }
+  diff2 = (int)me._pBlock[meY +  2][meX +  7] - (int)bPtr[bY +  2][bX +  7]; Dp += (diff2 * diff2); ///< {  7, 2 }
+  predD = Dp * 8;  if (predD > min) return(predD);
+//  upperThresh2p = predD + (predD / 50); lowerThresh2p = predD - (predD / 50); ///< +/- 2%
+  /// 32
+  diff1 = (int)me._pBlock[meY +  5][meX +  3] - (int)bPtr[bY +  5][bX +  3]; Dp += (diff1 * diff1); ///< {  3, 5 }
+  diff2 = (int)me._pBlock[meY + 15][meX +  8] - (int)bPtr[bY + 15][bX +  8]; Dp += (diff2 * diff2); ///< {  8,15 }
+  diff1 = (int)me._pBlock[meY + 12][meX +  1] - (int)bPtr[bY + 12][bX +  1]; Dp += (diff1 * diff1); ///< {  1,12 }
+  diff2 = (int)me._pBlock[meY +  6][meX +  8] - (int)bPtr[bY +  6][bX +  8]; Dp += (diff2 * diff2); ///< {  8, 6 }
+  diff1 = (int)me._pBlock[meY +  1][meX +  0] - (int)bPtr[bY +  1][bX +  0]; Dp += (diff1 * diff1); ///< {  0, 1 }
+  diff2 = (int)me._pBlock[meY +  9][meX + 12] - (int)bPtr[bY +  9][bX + 12]; Dp += (diff2 * diff2); ///< { 12, 9 }
+  diff1 = (int)me._pBlock[meY + 15][meX + 14] - (int)bPtr[bY + 15][bX + 14]; Dp += (diff1 * diff1); ///< { 14,15 }
+  diff2 = (int)me._pBlock[meY +  4][meX + 15] - (int)bPtr[bY +  4][bX + 15]; Dp += (diff2 * diff2); ///< { 15, 4 }
+  predD = Dp * 256/40;  if (predD > min) return(predD);
+  /// 40
+  diff1 = (int)me._pBlock[meY + 12][meX + 11] - (int)bPtr[bY + 12][bX + 11]; Dp += (diff1 * diff1); ///< { 11,12 }
+  diff2 = (int)me._pBlock[meY +  6][meX +  6] - (int)bPtr[bY +  6][bX +  6]; Dp += (diff2 * diff2); ///< {  6, 6 }
+  diff1 = (int)me._pBlock[meY + 11][meX +  7] - (int)bPtr[bY + 11][bX +  7]; Dp += (diff1 * diff1); ///< {  7,11 }
+  diff2 = (int)me._pBlock[meY +  7][meX +  0] - (int)bPtr[bY +  7][bX +  0]; Dp += (diff2 * diff2); ///< {  0, 7 }
+  diff1 = (int)me._pBlock[meY + 11][meX + 14] - (int)bPtr[bY + 11][bX + 14]; Dp += (diff1 * diff1); ///< { 14,11 }
+  diff2 = (int)me._pBlock[meY +  0][meX +  7] - (int)bPtr[bY +  0][bX +  7]; Dp += (diff2 * diff2); ///< {  7, 0 }
+  diff1 = (int)me._pBlock[meY + 15][meX +  2] - (int)bPtr[bY + 15][bX +  2]; Dp += (diff1 * diff1); ///< {  2,15 }
+  diff2 = (int)me._pBlock[meY +  7][meX + 12] - (int)bPtr[bY +  7][bX + 12]; Dp += (diff2 * diff2); ///< { 12, 7 }
+//  predD = Dp * 256/48;  if ((predD > min)||( (predD < upperThresh2p)&&(predD > lowerThresh2p) )) return(predD);
+//  upperThresh2p = predD + (predD / 50); lowerThresh2p = predD - (predD / 50); ///< +/- 2% change
+  predD = Dp * 256 / 48;  if (predD > min) return(predD);
+  /// 48
+  diff1 = (int)me._pBlock[meY +  3][meX +  2] - (int)bPtr[bY +  3][bX +  2]; Dp += (diff1 * diff1); ///< {  2, 3 }
+  diff2 = (int)me._pBlock[meY +  9][meX +  4] - (int)bPtr[bY +  9][bX +  4]; Dp += (diff2 * diff2); ///< {  4, 9 }
+  diff1 = (int)me._pBlock[meY +  2][meX + 12] - (int)bPtr[bY +  2][bX + 12]; Dp += (diff1 * diff1); ///< { 12, 2 }
+  diff2 = (int)me._pBlock[meY +  3][meX +  9] - (int)bPtr[bY +  3][bX +  9]; Dp += (diff2 * diff2); ///< {  9, 3 }
+  diff1 = (int)me._pBlock[meY + 13][meX + 12] - (int)bPtr[bY + 13][bX + 12]; Dp += (diff1 * diff1); ///< { 12,13 }
+  diff2 = (int)me._pBlock[meY +  0][meX +  3] - (int)bPtr[bY +  0][bX +  3]; Dp += (diff2 * diff2); ///< {  3, 0 }
+  diff1 = (int)me._pBlock[meY + 14][meX +  5] - (int)bPtr[bY + 14][bX +  5]; Dp += (diff1 * diff1); ///< {  5,14 }
+  diff2 = (int)me._pBlock[meY +  4][meX +  5] - (int)bPtr[bY +  4][bX +  5]; Dp += (diff2 * diff2); ///< {  5, 4 }
+  predD = Dp * 256/56;  if (predD > min) return(predD);
+  /// 56
+  diff1 = (int)me._pBlock[meY + 13][meX +  0] - (int)bPtr[bY + 13][bX +  0]; Dp += (diff1 * diff1); ///< {  0,13 }
+  diff2 = (int)me._pBlock[meY +  9][meX +  8] - (int)bPtr[bY +  9][bX +  8]; Dp += (diff2 * diff2); ///< {  8, 9 }
+  diff1 = (int)me._pBlock[meY + 11][meX +  2] - (int)bPtr[bY + 11][bX +  2]; Dp += (diff1 * diff1); ///< {  2,11 }
+  diff2 = (int)me._pBlock[meY + 15][meX + 11] - (int)bPtr[bY + 15][bX + 11]; Dp += (diff2 * diff2); ///< { 11,15 }
+  diff1 = (int)me._pBlock[meY +  1][meX + 10] - (int)bPtr[bY +  1][bX + 10]; Dp += (diff1 * diff1); ///< { 10, 1 }
+  diff2 = (int)me._pBlock[meY +  7][meX +  2] - (int)bPtr[bY +  7][bX +  2]; Dp += (diff2 * diff2); ///< {  2, 7 }
+  diff1 = (int)me._pBlock[meY +  6][meX + 15] - (int)bPtr[bY +  6][bX + 15]; Dp += (diff1 * diff1); ///< { 15, 6 }
+  diff2 = (int)me._pBlock[meY + 12][meX +  9] - (int)bPtr[bY + 12][bX +  9]; Dp += (diff2 * diff2); ///< {  9,12 }
+//  predD = Dp * 4;  if ((predD > min) || ((predD < upperThresh2p) && (predD > lowerThresh2p))) return(predD);
+//  upperThresh2p = predD + (predD / 50); lowerThresh2p = predD - (predD / 50); ///< +/- 2% change
+  predD = Dp * 4;  if (predD > min) return(predD);
+  /// 64
+  diff1 = (int)me._pBlock[meY +  2][meX +  5] - (int)bPtr[bY +  2][bX +  5]; Dp += (diff1 * diff1); ///< {  5, 2 }
+  diff2 = (int)me._pBlock[meY + 12][meX +  5] - (int)bPtr[bY + 12][bX +  5]; Dp += (diff2 * diff2); ///< {  5,12 }
+  diff1 = (int)me._pBlock[meY +  4][meX +  1] - (int)bPtr[bY +  4][bX +  1]; Dp += (diff1 * diff1); ///< {  1, 4 }
+  diff2 = (int)me._pBlock[meY +  5][meX + 11] - (int)bPtr[bY +  5][bX + 11]; Dp += (diff2 * diff2); ///< { 11, 5 }
+  diff1 = (int)me._pBlock[meY +  8][meX + 13] - (int)bPtr[bY +  8][bX + 13]; Dp += (diff1 * diff1); ///< { 13, 8 }
+  diff2 = (int)me._pBlock[meY +  7][meX +  9] - (int)bPtr[bY +  7][bX +  9]; Dp += (diff2 * diff2); ///< {  9, 7 }
+  diff1 = (int)me._pBlock[meY +  3][meX + 13] - (int)bPtr[bY +  3][bX + 13]; Dp += (diff1 * diff1); ///< { 13, 3 }
+  diff2 = (int)me._pBlock[meY +  8][meX +  5] - (int)bPtr[bY +  8][bX +  5]; Dp += (diff2 * diff2); ///< {  5, 8 }
+  predD = Dp * 256/72;  if (predD > min) return(predD);
+  diff1 = (int)me._pBlock[meY + 11][meX + 10] - (int)bPtr[bY + 11][bX + 10]; Dp += (diff1 * diff1); ///< { 10,11 }
+  diff2 = (int)me._pBlock[meY + 15][meX +  6] - (int)bPtr[bY + 15][bX +  6]; Dp += (diff2 * diff2); ///< {  6,15 }
+  diff1 = (int)me._pBlock[meY + 10][meX + 13] - (int)bPtr[bY + 10][bX + 13]; Dp += (diff1 * diff1); ///< { 13,10 }
+  diff2 = (int)me._pBlock[meY +  4][meX +  8] - (int)bPtr[bY +  4][bX +  8]; Dp += (diff2 * diff2); ///< {  8, 4 }
+  diff1 = (int)me._pBlock[meY + 10][meX +  3] - (int)bPtr[bY + 10][bX +  3]; Dp += (diff1 * diff1); ///< {  3,10 }
+  diff2 = (int)me._pBlock[meY +  1][meX + 13] - (int)bPtr[bY +  1][bX + 13]; Dp += (diff2 * diff2); ///< { 13, 1 }
+  diff1 = (int)me._pBlock[meY +  8][meX +  1] - (int)bPtr[bY +  8][bX +  1]; Dp += (diff1 * diff1); ///< {  1, 8 }
+  diff2 = (int)me._pBlock[meY +  0][meX + 14] - (int)bPtr[bY +  0][bX + 14]; Dp += (diff2 * diff2); ///< { 14, 0 }
+  predD = Dp * 256/80;  //if (predD > min) return(predD);
+/*
+  /// 80
+  diff1 = (int)me._pBlock[meY +  2][meX +  3] - (int)bPtr[bY +  2][bX +  3]; Dp += (diff1 * diff1); ///< {  3, 2 }
+  diff2 = (int)me._pBlock[meY + 12][meX + 14] - (int)bPtr[bY + 12][bX + 14]; Dp += (diff2 * diff2); ///< { 14,12 }
+  diff1 = (int)me._pBlock[meY +  5][meX +  6] - (int)bPtr[bY +  5][bX +  6]; Dp += (diff1 * diff1); ///< {  6, 5 }
+  diff2 = (int)me._pBlock[meY + 13][meX +  3] - (int)bPtr[bY + 13][bX +  3]; Dp += (diff2 * diff2); ///< {  3,13 }
+  diff1 = (int)me._pBlock[meY + 15][meX +  0] - (int)bPtr[bY + 15][bX +  0]; Dp += (diff1 * diff1); ///< {  0,15 }
+  diff2 = (int)me._pBlock[meY + 10][meX +  7] - (int)bPtr[bY + 10][bX +  7]; Dp += (diff2 * diff2); ///< {  7,10 }
+  diff1 = (int)me._pBlock[meY +  6][meX + 11] - (int)bPtr[bY +  6][bX + 11]; Dp += (diff1 * diff1); ///< { 11, 6 }
+  diff2 = (int)me._pBlock[meY +  1][meX +  6] - (int)bPtr[bY +  1][bX +  6]; Dp += (diff2 * diff2); ///< {  6, 1 }
+  predD = Dp * 256/88;  if (predD > min) return(predD);
+  diff1 = (int)me._pBlock[meY +  6][meX +  4] - (int)bPtr[bY +  6][bX +  4]; Dp += (diff1 * diff1); ///< {  4, 6 }
+  diff2 = (int)me._pBlock[meY +  1][meX +  1] - (int)bPtr[bY +  1][bX +  1]; Dp += (diff2 * diff2); ///< {  1, 1 }
+  diff1 = (int)me._pBlock[meY + 14][meX + 15] - (int)bPtr[bY + 14][bX + 15]; Dp += (diff1 * diff1); ///< { 15,14 }
+  diff2 = (int)me._pBlock[meY +  9][meX + 11] - (int)bPtr[bY +  9][bX + 11]; Dp += (diff2 * diff2); ///< { 11, 9 }
+  diff1 = (int)me._pBlock[meY + 14][meX +  7] - (int)bPtr[bY + 14][bX +  7]; Dp += (diff1 * diff1); ///< {  7,14 }
+  diff2 = (int)me._pBlock[meY +  2][meX +  8] - (int)bPtr[bY +  2][bX +  8]; Dp += (diff2 * diff2); ///< {  8, 2 }
+  diff1 = (int)me._pBlock[meY +  4][meX + 14] - (int)bPtr[bY +  4][bX + 14]; Dp += (diff1 * diff1); ///< { 14, 4 }
+  diff2 = (int)me._pBlock[meY + 11][meX +  4] - (int)bPtr[bY + 11][bX +  4]; Dp += (diff2 * diff2); ///< {  4,11 }
+  predD = Dp * 256/96;  if (predD > min) return(predD);
+  /// 96
+  diff1 = (int)me._pBlock[meY +  5][meX +  1] - (int)bPtr[bY +  5][bX +  1]; Dp += (diff1 * diff1); ///< {  1, 5 }
+  diff2 = (int)me._pBlock[meY + 13][meX + 10] - (int)bPtr[bY + 13][bX + 10]; Dp += (diff2 * diff2); ///< { 10,13 }
+  diff1 = (int)me._pBlock[meY +  7][meX +  6] - (int)bPtr[bY +  7][bX +  6]; Dp += (diff1 * diff1); ///< {  6, 7 }
+  diff2 = (int)me._pBlock[meY + 10][meX + 15] - (int)bPtr[bY + 10][bX + 15]; Dp += (diff2 * diff2); ///< { 15,10 }
+  diff1 = (int)me._pBlock[meY +  1][meX + 11] - (int)bPtr[bY +  1][bX + 11]; Dp += (diff1 * diff1); ///< { 11, 1 }
+  diff2 = (int)me._pBlock[meY +  9][meX +  0] - (int)bPtr[bY +  9][bX +  0]; Dp += (diff2 * diff2); ///< {  0, 9 }
+  diff1 = (int)me._pBlock[meY +  5][meX +  9] - (int)bPtr[bY +  5][bX +  9]; Dp += (diff1 * diff1); ///< {  9, 5 }
+  diff2 = (int)me._pBlock[meY +  1][meX +  4] - (int)bPtr[bY +  1][bX +  4]; Dp += (diff2 * diff2); ///< {  4, 1 }
+  predD = Dp * 256/104;  if (predD > min) return(predD);
+  diff1 = (int)me._pBlock[meY +  6][meX + 13] - (int)bPtr[bY +  6][bX + 13]; Dp += (diff1 * diff1); ///< { 13, 6 }
+  diff2 = (int)me._pBlock[meY + 15][meX + 12] - (int)bPtr[bY + 15][bX + 12]; Dp += (diff2 * diff2); ///< { 12,15 }
+  diff1 = (int)me._pBlock[meY +  4][meX +  3] - (int)bPtr[bY +  4][bX +  3]; Dp += (diff1 * diff1); ///< {  3, 4 }
+  diff2 = (int)me._pBlock[meY + 11][meX +  6] - (int)bPtr[bY + 11][bX +  6]; Dp += (diff2 * diff2); ///< {  6,11 }
+  diff1 = (int)me._pBlock[meY + 14][meX +  3] - (int)bPtr[bY + 14][bX +  3]; Dp += (diff1 * diff1); ///< {  3,14 }
+  diff2 = (int)me._pBlock[meY +  3][meX + 10] - (int)bPtr[bY +  3][bX + 10]; Dp += (diff2 * diff2); ///< { 10, 3 }
+  diff1 = (int)me._pBlock[meY +  9][meX +  9] - (int)bPtr[bY +  9][bX +  9]; Dp += (diff1 * diff1); ///< {  9, 9 }
+  diff2 = (int)me._pBlock[meY + 14][meX +  9] - (int)bPtr[bY + 14][bX +  9]; Dp += (diff2 * diff2); ///< {  9,14 }
+  predD = Dp * 256/112;  if (predD > min) return(predD);
+  /// 112
+  diff1 = (int)me._pBlock[meY +  3][meX +  6] - (int)bPtr[bY +  3][bX +  6]; Dp += (diff1 * diff1); ///< {  6, 3 }
+  diff2 = (int)me._pBlock[meY +  4][meX + 12] - (int)bPtr[bY +  4][bX + 12]; Dp += (diff2 * diff2); ///< { 12, 4 }
+  diff1 = (int)me._pBlock[meY +  5][meX +  0] - (int)bPtr[bY +  5][bX +  0]; Dp += (diff1 * diff1); ///< {  0, 5 }
+  diff2 = (int)me._pBlock[meY +  8][meX + 14] - (int)bPtr[bY +  8][bX + 14]; Dp += (diff2 * diff2); ///< { 14, 8 }
+  diff1 = (int)me._pBlock[meY + 10][meX +  1] - (int)bPtr[bY + 10][bX +  1]; Dp += (diff1 * diff1); ///< {  1,10 }
+  diff2 = (int)me._pBlock[meY +  2][meX +  1] - (int)bPtr[bY +  2][bX +  1]; Dp += (diff2 * diff2); ///< {  1, 2 }
+  diff1 = (int)me._pBlock[meY +  8][meX +  2] - (int)bPtr[bY +  8][bX +  2]; Dp += (diff1 * diff1); ///< {  2, 8 }
+  diff2 = (int)me._pBlock[meY + 12][meX +  2] - (int)bPtr[bY + 12][bX +  2]; Dp += (diff2 * diff2); ///< {  2,12 }
+  predD = Dp * 256/120;  if (predD > min) return(predD);
+  diff1 = (int)me._pBlock[meY +  6][meX +  2] - (int)bPtr[bY +  6][bX +  2]; Dp += (diff1 * diff1); ///< {  2, 6 }
+  diff2 = (int)me._pBlock[meY + 12][meX +  0] - (int)bPtr[bY + 12][bX +  0]; Dp += (diff2 * diff2); ///< {  0,12 }
+  diff1 = (int)me._pBlock[meY +  7][meX +  3] - (int)bPtr[bY +  7][bX +  3]; Dp += (diff1 * diff1); ///< {  3, 7 }
+  diff2 = (int)me._pBlock[meY + 11][meX +  8] - (int)bPtr[bY + 11][bX +  8]; Dp += (diff2 * diff2); ///< {  8,11 }
+  diff1 = (int)me._pBlock[meY +  8][meX +  3] - (int)bPtr[bY +  8][bX +  3]; Dp += (diff1 * diff1); ///< {  3, 8 }
+  diff2 = (int)me._pBlock[meY +  9][meX +  6] - (int)bPtr[bY +  9][bX +  6]; Dp += (diff2 * diff2); ///< {  6, 9 }
+  diff1 = (int)me._pBlock[meY +  0][meX +  9] - (int)bPtr[bY +  0][bX +  9]; Dp += (diff1 * diff1); ///< {  9, 0 }
+  diff2 = (int)me._pBlock[meY +  0][meX +  1] - (int)bPtr[bY +  0][bX +  1]; Dp += (diff2 * diff2); ///< {  1, 0 }
+  predD = Dp * 2;  if (predD > min) return(predD);
+  /// 128
+  diff1 = (int)me._pBlock[meY +  3][meX + 15] - (int)bPtr[bY +  3][bX + 15]; Dp += (diff1 * diff1); ///< { 15, 3 }
+  diff2 = (int)me._pBlock[meY + 12][meX + 13] - (int)bPtr[bY + 12][bX + 13]; Dp += (diff2 * diff2); ///< { 13,12 }
+  diff1 = (int)me._pBlock[meY +  8][meX + 11] - (int)bPtr[bY +  8][bX + 11]; Dp += (diff1 * diff1); ///< { 11, 8 }
+  diff2 = (int)me._pBlock[meY +  7][meX +  8] - (int)bPtr[bY +  7][bX +  8]; Dp += (diff2 * diff2); ///< {  8, 7 }
+  diff1 = (int)me._pBlock[meY +  5][meX +  5] - (int)bPtr[bY +  5][bX +  5]; Dp += (diff1 * diff1); ///< {  5, 5 }
+  diff2 = (int)me._pBlock[meY + 13][meX +  5] - (int)bPtr[bY + 13][bX +  5]; Dp += (diff2 * diff2); ///< {  5,13 }
+  diff1 = (int)me._pBlock[meY +  0][meX + 11] - (int)bPtr[bY +  0][bX + 11]; Dp += (diff1 * diff1); ///< { 11, 0 }
+  diff2 = (int)me._pBlock[meY + 10][meX + 10] - (int)bPtr[bY + 10][bX + 10]; Dp += (diff2 * diff2); ///< { 10,10 }
+  predD = Dp * 256/136;  if (predD > min) return(predD);
+  diff1 = (int)me._pBlock[meY +  7][meX + 15] - (int)bPtr[bY +  7][bX + 15]; Dp += (diff1 * diff1); ///< { 15, 7 }
+  diff2 = (int)me._pBlock[meY + 14][meX + 11] - (int)bPtr[bY + 14][bX + 11]; Dp += (diff2 * diff2); ///< { 11,14 }
+  diff1 = (int)me._pBlock[meY + 12][meX +  7] - (int)bPtr[bY + 12][bX +  7]; Dp += (diff1 * diff1); ///< {  7,12 }
+  diff2 = (int)me._pBlock[meY +  5][meX +  7] - (int)bPtr[bY +  5][bX +  7]; Dp += (diff2 * diff2); ///< {  7, 5 }
+  diff1 = (int)me._pBlock[meY + 13][meX + 14] - (int)bPtr[bY + 13][bX + 14]; Dp += (diff1 * diff1); ///< { 14,13 }
+  diff2 = (int)me._pBlock[meY +  6][meX + 10] - (int)bPtr[bY +  6][bX + 10]; Dp += (diff2 * diff2); ///< { 10, 6 }
+  diff1 = (int)me._pBlock[meY +  0][meX + 15] - (int)bPtr[bY +  0][bX + 15]; Dp += (diff1 * diff1); ///< { 15, 0 }
+  diff2 = (int)me._pBlock[meY + 15][meX +  9] - (int)bPtr[bY + 15][bX +  9]; Dp += (diff2 * diff2); ///< {  9,15 }
+  predD = Dp * 256/144;  if (predD > min) return(predD);
+  /// 144
+  diff1 = (int)me._pBlock[meY +  1][meX +  7] - (int)bPtr[bY +  1][bX +  7]; Dp += (diff1 * diff1); ///< {  7, 1 }
+  diff2 = (int)me._pBlock[meY + 10][meX + 12] - (int)bPtr[bY + 10][bX + 12]; Dp += (diff2 * diff2); ///< { 12,10 }
+  diff1 = (int)me._pBlock[meY + 14][meX +  2] - (int)bPtr[bY + 14][bX +  2]; Dp += (diff1 * diff1); ///< {  2,14 }
+  diff2 = (int)me._pBlock[meY +  2][meX +  4] - (int)bPtr[bY +  2][bX +  4]; Dp += (diff2 * diff2); ///< {  4, 2 }
+  diff1 = (int)me._pBlock[meY +  5][meX + 12] - (int)bPtr[bY +  5][bX + 12]; Dp += (diff1 * diff1); ///< { 12, 5 }
+  diff2 = (int)me._pBlock[meY +  2][meX + 10] - (int)bPtr[bY +  2][bX + 10]; Dp += (diff2 * diff2); ///< { 10, 2 }
+  diff1 = (int)me._pBlock[meY + 13][meX +  4] - (int)bPtr[bY + 13][bX +  4]; Dp += (diff1 * diff1); ///< {  4,13 }
+  diff2 = (int)me._pBlock[meY +  8][meX +  8] - (int)bPtr[bY +  8][bX +  8]; Dp += (diff2 * diff2); ///< {  8, 8 }
+  predD = Dp * 256/152;  if (predD > min) return(predD);
+  diff1 = (int)me._pBlock[meY + 15][meX + 15] - (int)bPtr[bY + 15][bX + 15]; Dp += (diff1 * diff1); ///< { 15,15 }
+  diff2 = (int)me._pBlock[meY +  5][meX + 14] - (int)bPtr[bY +  5][bX + 14]; Dp += (diff2 * diff2); ///< { 14, 5 }
+  diff1 = (int)me._pBlock[meY +  0][meX +  4] - (int)bPtr[bY +  0][bX +  4]; Dp += (diff1 * diff1); ///< {  4, 0 }
+  diff2 = (int)me._pBlock[meY +  9][meX + 14] - (int)bPtr[bY +  9][bX + 14]; Dp += (diff2 * diff2); ///< { 14, 9 }
+  diff1 = (int)me._pBlock[meY +  2][meX + 13] - (int)bPtr[bY +  2][bX + 13]; Dp += (diff1 * diff1); ///< { 13, 2 }
+  diff2 = (int)me._pBlock[meY +  7][meX +  5] - (int)bPtr[bY +  7][bX +  5]; Dp += (diff2 * diff2); ///< {  5, 7 }
+  diff1 = (int)me._pBlock[meY +  3][meX +  8] - (int)bPtr[bY +  3][bX +  8]; Dp += (diff1 * diff1); ///< {  8, 3 }
+  diff2 = (int)me._pBlock[meY +  0][meX +  0] - (int)bPtr[bY +  0][bX +  0]; Dp += (diff2 * diff2); ///< {  0, 0 }
+  predD = Dp * 256/160;  if (predD > min) return(predD);
+  /// 160
+  diff1 = (int)me._pBlock[meY +  4][meX +  2] - (int)bPtr[bY +  4][bX +  2]; Dp += (diff1 * diff1); ///< {  2, 4 }
+  diff2 = (int)me._pBlock[meY + 15][meX +  7] - (int)bPtr[bY + 15][bX +  7]; Dp += (diff2 * diff2); ///< {  7,15 }
+  diff1 = (int)me._pBlock[meY + 11][meX + 11] - (int)bPtr[bY + 11][bX + 11]; Dp += (diff1 * diff1); ///< { 11,11 }
+  diff2 = (int)me._pBlock[meY + 11][meX +  0] - (int)bPtr[bY + 11][bX +  0]; Dp += (diff2 * diff2); ///< {  0,11 }
+  diff1 = (int)me._pBlock[meY + 10][meX +  6] - (int)bPtr[bY + 10][bX +  6]; Dp += (diff1 * diff1); ///< {  6,10 }
+  diff2 = (int)me._pBlock[meY +  0][meX +  8] - (int)bPtr[bY +  0][bX +  8]; Dp += (diff2 * diff2); ///< {  8, 0 }
+  diff1 = (int)me._pBlock[meY +  5][meX +  4] - (int)bPtr[bY +  5][bX +  4]; Dp += (diff1 * diff1); ///< {  4, 5 }
+  diff2 = (int)me._pBlock[meY + 15][meX +  3] - (int)bPtr[bY + 15][bX +  3]; Dp += (diff2 * diff2); ///< {  3,15 }
+  predD = Dp * 256/168;  if (predD > min) return(predD);
+  diff1 = (int)me._pBlock[meY +  4][meX + 10] - (int)bPtr[bY +  4][bX + 10]; Dp += (diff1 * diff1); ///< { 10, 4 }
+  diff2 = (int)me._pBlock[meY + 11][meX + 15] - (int)bPtr[bY + 11][bX + 15]; Dp += (diff2 * diff2); ///< { 15,11 }
+  diff1 = (int)me._pBlock[meY + 12][meX +  8] - (int)bPtr[bY + 12][bX +  8]; Dp += (diff1 * diff1); ///< {  8,12 }
+  diff2 = (int)me._pBlock[meY + 13][meX + 13] - (int)bPtr[bY + 13][bX + 13]; Dp += (diff2 * diff2); ///< { 13,13 }
+  diff1 = (int)me._pBlock[meY +  4][meX +  0] - (int)bPtr[bY +  4][bX +  0]; Dp += (diff1 * diff1); ///< {  0, 4 }
+  diff2 = (int)me._pBlock[meY + 10][meX +  4] - (int)bPtr[bY + 10][bX +  4]; Dp += (diff2 * diff2); ///< {  4,10 }
+  diff1 = (int)me._pBlock[meY +  7][meX + 11] - (int)bPtr[bY +  7][bX + 11]; Dp += (diff1 * diff1); ///< { 11, 7 }
+  diff2 = (int)me._pBlock[meY +  3][meX +  5] - (int)bPtr[bY +  3][bX +  5]; Dp += (diff2 * diff2); ///< {  5, 3 }
+  predD = Dp * 256/176;  if (predD > min) return(predD);
+  /// 176
+  diff1 = (int)me._pBlock[meY + 13][meX +  1] - (int)bPtr[bY + 13][bX +  1]; Dp += (diff1 * diff1); ///< {  1,13 }
+  diff2 = (int)me._pBlock[meY +  7][meX +  7] - (int)bPtr[bY +  7][bX +  7]; Dp += (diff2 * diff2); ///< {  7, 7 }
+  diff1 = (int)me._pBlock[meY +  3][meX + 14] - (int)bPtr[bY +  3][bX + 14]; Dp += (diff1 * diff1); ///< { 14, 3 }
+  diff2 = (int)me._pBlock[meY +  2][meX +  2] - (int)bPtr[bY +  2][bX +  2]; Dp += (diff2 * diff2); ///< {  2, 2 }
+  diff1 = (int)me._pBlock[meY + 12][meX + 10] - (int)bPtr[bY + 12][bX + 10]; Dp += (diff1 * diff1); ///< { 10,12 }
+  diff2 = (int)me._pBlock[meY +  8][meX +  0] - (int)bPtr[bY +  8][bX +  0]; Dp += (diff2 * diff2); ///< {  0, 8 }
+  diff1 = (int)me._pBlock[meY +  1][meX + 12] - (int)bPtr[bY +  1][bX + 12]; Dp += (diff1 * diff1); ///< { 12, 1 }
+  diff2 = (int)me._pBlock[meY + 15][meX +  5] - (int)bPtr[bY + 15][bX +  5]; Dp += (diff2 * diff2); ///< {  5,15 }
+  predD = Dp * 256/184;  if (predD > min) return(predD);
+  diff1 = (int)me._pBlock[meY +  7][meX + 13] - (int)bPtr[bY +  7][bX + 13]; Dp += (diff1 * diff1); ///< { 13, 7 }
+  diff2 = (int)me._pBlock[meY + 14][meX + 12] - (int)bPtr[bY + 14][bX + 12]; Dp += (diff2 * diff2); ///< { 12,14 }
+  diff1 = (int)me._pBlock[meY +  9][meX +  3] - (int)bPtr[bY +  9][bX +  3]; Dp += (diff1 * diff1); ///< {  3, 9 }
+  diff2 = (int)me._pBlock[meY +  6][meX +  9] - (int)bPtr[bY +  6][bX +  9]; Dp += (diff2 * diff2); ///< {  9, 6 }
+  diff1 = (int)me._pBlock[meY +  2][meX +  6] - (int)bPtr[bY +  2][bX +  6]; Dp += (diff1 * diff1); ///< {  6, 2 }
+  diff2 = (int)me._pBlock[meY + 13][meX +  7] - (int)bPtr[bY + 13][bX +  7]; Dp += (diff2 * diff2); ///< {  7,13 }
+  diff1 = (int)me._pBlock[meY + 11][meX + 13] - (int)bPtr[bY + 11][bX + 13]; Dp += (diff1 * diff1); ///< { 13,11 }
+  diff2 = (int)me._pBlock[meY + 15][meX +  1] - (int)bPtr[bY + 15][bX +  1]; Dp += (diff2 * diff2); ///< {  1,15 }
+  predD = Dp * 256/192;  if (predD > min) return(predD);
+  /// 192
+  diff1 = (int)me._pBlock[meY + 11][meX +  5] - (int)bPtr[bY + 11][bX +  5]; Dp += (diff1 * diff1); ///< {  5,11 }
+  diff2 = (int)me._pBlock[meY +  8][meX +  9] - (int)bPtr[bY +  8][bX +  9]; Dp += (diff2 * diff2); ///< {  9, 8 }
+  diff1 = (int)me._pBlock[meY +  5][meX + 15] - (int)bPtr[bY +  5][bX + 15]; Dp += (diff1 * diff1); ///< { 15, 5 }
+  diff2 = (int)me._pBlock[meY +  0][meX +  6] - (int)bPtr[bY +  0][bX +  6]; Dp += (diff2 * diff2); ///< {  6, 0 }
+  diff1 = (int)me._pBlock[meY +  3][meX + 12] - (int)bPtr[bY +  3][bX + 12]; Dp += (diff1 * diff1); ///< { 12, 3 }
+  diff2 = (int)me._pBlock[meY +  6][meX +  0] - (int)bPtr[bY +  6][bX +  0]; Dp += (diff2 * diff2); ///< {  0, 6 }
+  diff1 = (int)me._pBlock[meY + 10][meX +  2] - (int)bPtr[bY + 10][bX +  2]; Dp += (diff1 * diff1); ///< {  2,10 }
+  diff2 = (int)me._pBlock[meY +  0][meX + 13] - (int)bPtr[bY +  0][bX + 13]; Dp += (diff2 * diff2); ///< { 13, 0 }
+  predD = Dp * 256/200;  if (predD > min) return(predD);
+  diff1 = (int)me._pBlock[meY + 15][meX + 13] - (int)bPtr[bY + 15][bX + 13]; Dp += (diff1 * diff1); ///< { 13,15 }
+  diff2 = (int)me._pBlock[meY +  3][meX +  3] - (int)bPtr[bY +  3][bX +  3]; Dp += (diff2 * diff2); ///< {  3, 3 }
+  diff1 = (int)me._pBlock[meY +  4][meX +  9] - (int)bPtr[bY +  4][bX +  9]; Dp += (diff1 * diff1); ///< {  9, 4 }
+  diff2 = (int)me._pBlock[meY +  8][meX + 15] - (int)bPtr[bY +  8][bX + 15]; Dp += (diff2 * diff2); ///< { 15, 8 }
+  diff1 = (int)me._pBlock[meY +  9][meX +  5] - (int)bPtr[bY +  9][bX +  5]; Dp += (diff1 * diff1); ///< {  5, 9 }
+  diff2 = (int)me._pBlock[meY +  0][meX +  2] - (int)bPtr[bY +  0][bX +  2]; Dp += (diff2 * diff2); ///< {  2, 0 }
+  diff1 = (int)me._pBlock[meY +  9][meX + 10] - (int)bPtr[bY +  9][bX + 10]; Dp += (diff1 * diff1); ///< { 10, 9 }
+  diff2 = (int)me._pBlock[meY +  2][meX + 15] - (int)bPtr[bY +  2][bX + 15]; Dp += (diff2 * diff2); ///< { 15, 2 }
+  predD = Dp * 256/208;  if (predD > min) return(predD);
+  /// 208
+  diff1 = (int)me._pBlock[meY + 12][meX + 15] - (int)bPtr[bY + 12][bX + 15]; Dp += (diff1 * diff1); ///< { 15,12 }
+  diff2 = (int)me._pBlock[meY + 14][meX +  8] - (int)bPtr[bY + 14][bX +  8]; Dp += (diff2 * diff2); ///< {  8,14 }
+  diff1 = (int)me._pBlock[meY +  6][meX +  7] - (int)bPtr[bY +  6][bX +  7]; Dp += (diff1 * diff1); ///< {  7, 6 }
+  diff2 = (int)me._pBlock[meY + 14][meX +  0] - (int)bPtr[bY + 14][bX +  0]; Dp += (diff2 * diff2); ///< {  0,14 }
+  diff1 = (int)me._pBlock[meY + 14][meX + 14] - (int)bPtr[bY + 14][bX + 14]; Dp += (diff1 * diff1); ///< { 14,14 }
+  diff2 = (int)me._pBlock[meY +  2][meX +  0] - (int)bPtr[bY +  2][bX +  0]; Dp += (diff2 * diff2); ///< {  0, 2 }
+  diff1 = (int)me._pBlock[meY +  0][meX + 10] - (int)bPtr[bY +  0][bX + 10]; Dp += (diff1 * diff1); ///< { 10, 0 }
+  diff2 = (int)me._pBlock[meY + 12][meX +  4] - (int)bPtr[bY + 12][bX +  4]; Dp += (diff2 * diff2); ///< {  4,12 }
+  predD = Dp * 256/216;  if (predD > min) return(predD);
+  diff1 = (int)me._pBlock[meY +  6][meX +  3] - (int)bPtr[bY +  6][bX +  3]; Dp += (diff1 * diff1); ///< {  3, 6 }
+  diff2 = (int)me._pBlock[meY +  8][meX + 12] - (int)bPtr[bY +  8][bX + 12]; Dp += (diff2 * diff2); ///< { 12, 8 }
+  diff1 = (int)me._pBlock[meY +  4][meX +  6] - (int)bPtr[bY +  4][bX +  6]; Dp += (diff1 * diff1); ///< {  6, 4 }
+  diff2 = (int)me._pBlock[meY + 15][meX + 10] - (int)bPtr[bY + 15][bX + 10]; Dp += (diff2 * diff2); ///< { 10,15 }
+  diff1 = (int)me._pBlock[meY + 11][meX +  9] - (int)bPtr[bY + 11][bX +  9]; Dp += (diff1 * diff1); ///< {  9,11 }
+  diff2 = (int)me._pBlock[meY +  1][meX +  8] - (int)bPtr[bY +  1][bX +  8]; Dp += (diff2 * diff2); ///< {  8, 1 }
+  diff1 = (int)me._pBlock[meY + 11][meX +  1] - (int)bPtr[bY + 11][bX +  1]; Dp += (diff1 * diff1); ///< {  1,11 }
+  diff2 = (int)me._pBlock[meY +  8][meX +  6] - (int)bPtr[bY +  8][bX +  6]; Dp += (diff2 * diff2); ///< {  6, 8 }
+  predD = Dp * 256/224;  if (predD > min) return(predD);
+  /// 224
+  diff1 = (int)me._pBlock[meY +  4][meX + 11] - (int)bPtr[bY +  4][bX + 11]; Dp += (diff1 * diff1); ///< { 11, 4 }
+  diff2 = (int)me._pBlock[meY + 13][meX + 11] - (int)bPtr[bY + 13][bX + 11]; Dp += (diff2 * diff2); ///< { 11,13 }
+  diff1 = (int)me._pBlock[meY + 14][meX +  4] - (int)bPtr[bY + 14][bX +  4]; Dp += (diff1 * diff1); ///< {  4,14 }
+  diff2 = (int)me._pBlock[meY +  7][meX +  1] - (int)bPtr[bY +  7][bX +  1]; Dp += (diff2 * diff2); ///< {  1, 7 }
+  diff1 = (int)me._pBlock[meY + 10][meX + 14] - (int)bPtr[bY + 10][bX + 14]; Dp += (diff1 * diff1); ///< { 14,10 }
+  diff2 = (int)me._pBlock[meY +  1][meX +  3] - (int)bPtr[bY +  1][bX +  3]; Dp += (diff2 * diff2); ///< {  3, 1 }
+  diff1 = (int)me._pBlock[meY + 10][meX +  8] - (int)bPtr[bY + 10][bX +  8]; Dp += (diff1 * diff1); ///< {  8,10 }
+  diff2 = (int)me._pBlock[meY +  6][meX + 14] - (int)bPtr[bY +  6][bX + 14]; Dp += (diff2 * diff2); ///< { 14, 6 }
+  predD = Dp * 256/232;  if (predD > min) return(predD);
+  diff1 = (int)me._pBlock[meY + 12][meX +  6] - (int)bPtr[bY + 12][bX +  6]; Dp += (diff1 * diff1); ///< {  6,12 }
+  diff2 = (int)me._pBlock[meY +  2][meX + 11] - (int)bPtr[bY +  2][bX + 11]; Dp += (diff2 * diff2); ///< { 11, 2 }
+  diff1 = (int)me._pBlock[meY +  3][meX +  1] - (int)bPtr[bY +  3][bX +  1]; Dp += (diff1 * diff1); ///< {  1, 3 }
+  diff2 = (int)me._pBlock[meY +  1][meX + 14] - (int)bPtr[bY +  1][bX + 14]; Dp += (diff2 * diff2); ///< { 14, 1 }
+  diff1 = (int)me._pBlock[meY +  6][meX +  5] - (int)bPtr[bY +  6][bX +  5]; Dp += (diff1 * diff1); ///< {  5, 6 }
+  diff2 = (int)me._pBlock[meY +  3][meX +  7] - (int)bPtr[bY +  3][bX +  7]; Dp += (diff2 * diff2); ///< {  7, 3 }
+  diff1 = (int)me._pBlock[meY + 13][meX +  2] - (int)bPtr[bY + 13][bX +  2]; Dp += (diff1 * diff1); ///< {  2,13 }
+  diff2 = (int)me._pBlock[meY +  9][meX + 13] - (int)bPtr[bY +  9][bX + 13]; Dp += (diff2 * diff2); ///< { 13, 9 }
+  predD = Dp * 256/240;  if (predD > min) return(predD);
+  /// 240
+  diff1 = (int)me._pBlock[meY +  9][meX +  1] - (int)bPtr[bY +  9][bX +  1]; Dp += (diff1 * diff1); ///< {  1, 9 }
+  diff2 = (int)me._pBlock[meY +  4][meX +  4] - (int)bPtr[bY +  4][bX +  4]; Dp += (diff2 * diff2); ///< {  4, 4 }
+  diff1 = (int)me._pBlock[meY +  2][meX +  9] - (int)bPtr[bY +  2][bX +  9]; Dp += (diff1 * diff1); ///< {  9, 2 }
+  diff2 = (int)me._pBlock[meY + 12][meX + 12] - (int)bPtr[bY + 12][bX + 12]; Dp += (diff2 * diff2); ///< { 12,12 }
+  diff1 = (int)me._pBlock[meY + 14][meX +  6] - (int)bPtr[bY + 14][bX +  6]; Dp += (diff1 * diff1); ///< {  6,14 }
+  diff2 = (int)me._pBlock[meY +  1][meX +  5] - (int)bPtr[bY +  1][bX +  5]; Dp += (diff2 * diff2); ///< {  5, 1 }
+  diff1 = (int)me._pBlock[meY +  4][meX + 13] - (int)bPtr[bY +  4][bX + 13]; Dp += (diff1 * diff1); ///< { 13, 4 }
+  diff2 = (int)me._pBlock[meY +  5][meX +  2] - (int)bPtr[bY +  5][bX +  2]; Dp += (diff2 * diff2); ///< {  2, 5 }
+  predD = Dp * 256/248;  if (predD > min) return(predD);
+  diff1 = (int)me._pBlock[meY + 11][meX +  3] - (int)bPtr[bY + 11][bX +  3]; Dp += (diff1 * diff1); ///< {  3,11 }
+  diff2 = (int)me._pBlock[meY + 13][meX +  9] - (int)bPtr[bY + 13][bX +  9]; Dp += (diff2 * diff2); ///< {  9,13 }
+  diff1 = (int)me._pBlock[meY +  6][meX + 12] - (int)bPtr[bY +  6][bX + 12]; Dp += (diff1 * diff1); ///< { 12, 6 }
+  diff2 = (int)me._pBlock[meY +  8][meX +  4] - (int)bPtr[bY +  8][bX +  4]; Dp += (diff2 * diff2); ///< {  4, 8 }
+  diff1 = (int)me._pBlock[meY +  5][meX +  8] - (int)bPtr[bY +  5][bX +  8]; Dp += (diff1 * diff1); ///< {  8, 5 }
+  diff2 = (int)me._pBlock[meY + 10][meX + 11] - (int)bPtr[bY + 10][bX + 11]; Dp += (diff2 * diff2); ///< { 11,10 }
+  diff1 = (int)me._pBlock[meY +  9][meX +  7] - (int)bPtr[bY +  9][bX +  7]; Dp += (diff1 * diff1); ///< {  7, 9 }
+  diff2 = (int)me._pBlock[meY +  7][meX + 10] - (int)bPtr[bY + 7][bX + 10]; Dp += (diff2 * diff2); ///< { 10, 7 }
+  predD = Dp
+*/
+  return(predD);
+
+}//end Tsd16x16OptimalPathLessThan.
+
+int OverlayMem2Dv2::Tsd16x16PartialPathLessThan(OverlayMem2Dv2& me, OverlayMem2Dv2& b, void* path, int len, int min, int batchlen)
+{
+  short**	bPtr = b.Get2DSrcPtr();
+  OM2DV2_COORD* pPath = (OM2DV2_COORD *)path;
+
+  int totBatches  = len / batchlen;
+  int Dp          = 0;	///< Accumulated partial square error.
+  int expectedD   = 0; ///< The predicted value of sqr err if all batches were processed. 
+  int p           = 0;
+  int myPos       = me._yPos;
+  int mxPos       = me._xPos;
+  int byPos       = b._yPos;
+  int bxPos       = b._xPos;
+
+  for (int batch = 0; (batch < totBatches) && (expectedD <= min); batch++) ///< Early exit if pred D exceeded min.
+  {
+    /// Process the next batch.
+    int batchEnd = (batch + 1)*batchlen;
+
+    for (; p < batchEnd; )
+    {
+      int pX1 = (int)pPath[p].x;  int pY1 = (int)pPath[p].y; p++;
+      int diff1 = (int)me._pBlock[myPos + pY1][mxPos + pX1] - (int)bPtr[byPos + pY1][bxPos + pX1];
+      Dp += (diff1 * diff1);	///< pth partial sqr err.
+
+      int pX2 = (int)pPath[p].x;  int pY2 = (int)pPath[p].y; p++;
+      int diff2 = (int)me._pBlock[myPos + pY2][mxPos + pX2] - (int)bPtr[byPos + pY2][bxPos + pX2];
+      Dp += (diff2 * diff2);	///< pth partial sqr err.
+    }//end for p...
+/*
+    for (; p < batchEnd; p++)
+    {
+      int pX = (int)pPath[p].x;
+      int pY = (int)pPath[p].y;
+      int diff = (int)me._pBlock[myPos + pY][mxPos + pX] - (int)bPtr[byPos + pY][bxPos + pX];
+      Dp += (diff * diff);	///< pth partial sqr err.
+    }//end for p...
+*/
+
+    /// Predict the final distortion from past batches.
+    expectedD = (Dp*totBatches) / (batch + 1);
+  }//end for batch...
+
+  return(expectedD);
+}//end Tsd16x16PartialPathLessThan.
+
+int OverlayMem2Dv2::Tsd16x16PartialPath(OverlayMem2Dv2& me, OverlayMem2Dv2& b, void* path, int len)
+{
+  short**	bPtr = b.Get2DSrcPtr();
+  OM2DV2_COORD* pPath = (OM2DV2_COORD *)path;
+
+  int Dp = 0;	///< Accumulated partial square error.
+  int myPos = me._yPos;
+  int mxPos = me._xPos;
+  int byPos = b._yPos;
+  int bxPos = b._xPos;
+
+  for (int p = 0; p < len; )
+  {
+    int pX = (int)pPath[p].x; int pY = (int)pPath[p].y; p++;
+    int diff = (int)me._pBlock[myPos + pY][mxPos + pX] - (int)bPtr[byPos + pY][bxPos + pX];
+    Dp += (diff * diff);	///< pth partial sqr err.
+
+    int pX2 = (int)pPath[p].x; int pY2 = (int)pPath[p].y; p++;
+    int diff2 = (int)me._pBlock[myPos + pY2][mxPos + pX2] - (int)bPtr[byPos + pY2][bxPos + pX2];
+    Dp += (diff2 * diff2);	///< pth partial sqr err.
+  }//end for p...
+
+  return(Dp);
+}//end Tsd16x16PartialPath.
+
+ /** Calc the total absolute difference with the input block.
 The block dimensions must match else return INF.
 @param b	: Input block.
 @return		: Total absolute diff.	
@@ -2647,6 +3030,38 @@ void OverlayMem2Dv2::Half(void** srcPtr, int srcWidth, int srcHeight,
 
 }//end Half.
 
+/** Dump the current block into a file.
+Treat all elements as type integer.
+@param pBlk     : Blk to dump.
+@param filename : File name to use.
+@param title    : Title to use in the text file.
+@return         : None.
+*/
+void OverlayMem2Dv2::Dump(OverlayMem2Dv2* pBlk, char* filename, const char* title)
+{
+  int i,j; 
+
+  MeasurementTable* pT = new MeasurementTable();
+	pT->SetTitle(title);
+
+  int cols = pBlk->GetWidth();
+  int rows = pBlk->GetHeight();
+
+	pT->Create(cols, rows);
+  for(j = 0; j < cols; j++)
+  {
+    pT->SetHeading(j, "");
+    pT->SetDataType(j, MeasurementTable::INT);
+  }//end for j...
+
+	for(i = 0; i < rows; i++)
+		for(j = 0; j < cols; j++)
+			pT->WriteItem(j, i, pBlk->Read(j, i));
+
+  pT->Save(filename, ",", 0);
+
+  delete pT;
+}//end Dump.
 
 /*
 ---------------------------------------------------------------------------

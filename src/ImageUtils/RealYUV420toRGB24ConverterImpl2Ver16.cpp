@@ -43,7 +43,14 @@ RESTRICTIONS	: Redistribution and use in source and binary forms, with or withou
 */
 #ifdef _WINDOWS
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
-#include <windows.h>
+#if (_MSC_VER == 1800)
+#pragma warning(push)     // warning C4005: '__useHeader' : macro redefinition caused by SDK7 VS2013 combination
+#pragma warning(disable:4005)
+#endif
+#include <Windows.h>
+#if (_MSC_VER == 1800)
+#pragma warning(pop)      // restore original warning level
+#endif
 #else
 #include <stdio.h>
 #endif

@@ -57,6 +57,10 @@ public:
 	// Interface.
 	void Convert(void* pRgb, void* pY, void* pU, void* pV);
 
+private:
+  void FlipConvert(void* pRgb, void* pY, void* pU, void* pV);
+  void NonFlipConvert(void* pRgb, void* pY, void* pU, void* pV);
+
 };//end RealRGB32toYUV420Converter.
 
 

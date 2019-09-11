@@ -46,6 +46,18 @@ RESTRICTIONS	: Redistribution and use in source and binary forms, with or withou
 
 #include "RGBtoYUV420Converter.h"
 
+#ifdef _WIN32
+#define RRGB24YUVCI2_MICROSOFT_PARALLEL 1
+#endif
+
+#ifdef RRGB24YUVCI2_MICROSOFT_PARALLEL
+#include <ppl.h>
+#include <ppltasks.h>
+
+using namespace concurrency;
+using namespace std;
+#endif
+
 /*
 ===========================================================================
   Class definition.
@@ -67,7 +79,10 @@ private:
   void FlipConvert(void* pRgb, void* pY, void* pU, void* pV);
   void NonFlipConvert(void* pRgb, void* pY, void* pU, void* pV);
 
+#ifdef RRGB24YUVCI2_MICROSOFT_PARALLEL
+  void NonFlipInner(unsigned char* src, short* py, short* pu, short* pv, int yb, int xBlks);
+  void FlipInner(unsigned char* src, short* py, short* pu, short* pv, int yb, int xBlks);
+#endif
 };//end _RealRGB24toYUV420ConverterImpl2Ver16_H.
-
 
 #endif

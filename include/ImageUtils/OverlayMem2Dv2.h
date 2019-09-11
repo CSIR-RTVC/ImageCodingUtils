@@ -250,6 +250,21 @@ public:
 	int Tsd16x16PartialLessThan(OverlayMem2Dv2& b, int min)
 		{ return( Tsd16x16PartialLessThan(*this, b, min) ); }
 	static int Tsd16x16PartialLessThan(OverlayMem2Dv2& me, OverlayMem2Dv2& b, int min);	///< Fast for 16x16 blocks.
+  int Tsd16x16PartialPathLessThan(OverlayMem2Dv2& b, void* path, int len, int min)
+    { return(Tsd16x16PartialPathLessThan(*this, b, path, len, min)); }
+  static int Tsd16x16PartialPathLessThan(OverlayMem2Dv2& me, OverlayMem2Dv2& b, void* path, int len, int min);	///< Fast for 16x16 blocks.
+  int Tsd16x16OptimalPathLessThan(OverlayMem2Dv2& b, void* path, int min)
+  { return(Tsd16x16OptimalPathLessThan(*this, b, path, min)); }
+  static int Tsd16x16OptimalPathLessThan(OverlayMem2Dv2& me, OverlayMem2Dv2& b, void* path, int min);	///< Fast loop for 16x16 blocks.
+  int Tsd16x16OptimalPathLessThan(OverlayMem2Dv2& b, int min)
+    { return(Tsd16x16OptimalPathLessThan(*this, b, min)); }
+  static int Tsd16x16OptimalPathLessThan(OverlayMem2Dv2& me, OverlayMem2Dv2& b, int min);	///< Fast unrolled loop for 16x16 blocks.
+  int Tsd16x16PartialPathLessThan(OverlayMem2Dv2& b, void* path, int len, int min, int batchlen)
+    { return(Tsd16x16PartialPathLessThan(*this, b, path, len, min, batchlen)); }
+  static int Tsd16x16PartialPathLessThan(OverlayMem2Dv2& me, OverlayMem2Dv2& b, void* path, int len, int min, int batchlen);	///< In batches.
+  int Tsd16x16PartialPath(OverlayMem2Dv2& b, void* path, int len)
+    { return(Tsd16x16PartialPath(*this, b, path, len)); }
+  static int Tsd16x16PartialPath(OverlayMem2Dv2& me, OverlayMem2Dv2& b, void* path, int len);	///< Fast for 16x16 blocks.
 
 	/// Calc total absolute difference with the input block.
 	int Tad(OverlayMem2Dv2& b)
@@ -289,6 +304,8 @@ public:
 	/// Sub sample the src by half into another 2D mem block with possible offset.
 	static void Half(void**	srcPtr, int srcWidth,			int srcHeight,
 									 void** dstPtr, int widthOff = 0, int heightOff = 0);
+  /// Dump the current block into a file.
+  static void Dump(OverlayMem2Dv2* pBlk, char* filename, const char* title);
 
 protected:
 	/// Class constants

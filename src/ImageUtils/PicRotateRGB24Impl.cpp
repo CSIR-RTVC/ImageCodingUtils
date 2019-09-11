@@ -35,16 +35,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 PicRotateRGB24Impl::PicRotateRGB24Impl()
 {
-  m_eMode = ROTATE_NONE;
+	m_eMode = ROTATE_NONE;
 }
 
 PicRotateRGB24Impl::~PicRotateRGB24Impl()
-{
-
-}
+{;}
 
 int PicRotateRGB24Impl::BytesPerPixel()
 {
-  return 3;
+	return 3;
 }
-

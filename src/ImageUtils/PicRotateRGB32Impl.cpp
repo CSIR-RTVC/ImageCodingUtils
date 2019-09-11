@@ -34,17 +34,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "PicRotateRGB32Impl.h"
 
 PicRotateRGB32Impl::PicRotateRGB32Impl()
-{
-
-}
+{;}
 
 PicRotateRGB32Impl::~PicRotateRGB32Impl()
-{
-
-}
+{;}
 
 int PicRotateRGB32Impl::BytesPerPixel()
 {
-  return 4;
+	return 4;
 }
-

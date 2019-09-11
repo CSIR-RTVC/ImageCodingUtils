@@ -74,9 +74,9 @@ void RealYUV444toRGB24Converter::Convert(void* pInputBuffer, void* pRgb)
         unsigned char y = inBuffer[ (i * 4 ) + 2 ];
         //drop the 4th byte (= alpha-channel which is always 0 in AYUV) to go from 32bit to 24 bit per pixel
 
-        int r = y + 1.402 * (v - 128);
-        int g = y - 0.344 * (u - 128) - 0.714 * (v - 128);
-        int b = y + 1.772 * (u - 128);
+        int r = static_cast<int>(y + 1.402 * (v - 128));
+        int g = static_cast<int>(y - 0.344 * (u - 128) - 0.714 * (v - 128));
+        int b = static_cast<int>(y + 1.772 * (u - 128));
 
         optr[i * 3] = (unsigned char)RYUVRGB24C_RANGECHECK_0TO255(b);
         optr[(i * 3) + 1] = (unsigned char)RYUVRGB24C_RANGECHECK_0TO255(g);
@@ -84,4 +84,9 @@ void RealYUV444toRGB24Converter::Convert(void* pInputBuffer, void* pRgb)
 
     }
 }//end Convert
+
+
+
+
+
 

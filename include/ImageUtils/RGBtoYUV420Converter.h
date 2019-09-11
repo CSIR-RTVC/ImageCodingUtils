@@ -47,11 +47,7 @@ RESTRICTIONS	: Redistribution and use in source and binary forms, with or withou
 #ifndef _RGBTOYUV420CONVERTER_H
 #define _RGBTOYUV420CONVERTER_H
 
-#ifdef _BUILD_FOR_SHORT
-	typedef short yuvType;
-#else
-	typedef signed char yuvType;
-#endif
+typedef short yuvType;
 
 /*
 ===========================================================================
@@ -74,10 +70,9 @@ public:
 	int	GetWidth(void)			{ return(_width); }
 	int	GetHeight(void)			{ return(_height); }
 	int GetChrominanceOffset() const { return _chrOff; }
-  bool GetFlip() const { return _flip; }
+    bool GetFlip() const { return _flip; }
 
   void SetDimensions(int width, int height)	{_width = width; _height = height;}
-  void SetChrOffset(int chrOff){ _chrOff = chrOff; }
   void SetFlip(bool flip) { _flip = flip; }
   void SetChrominanceOffset(int val) { _chrOff = val; }
 

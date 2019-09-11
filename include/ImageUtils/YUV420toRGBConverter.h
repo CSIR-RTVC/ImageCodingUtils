@@ -46,12 +46,7 @@ RESTRICTIONS	: Redistribution and use in source and binary forms, with or withou
 #ifndef _YUV420TORGBCONVERTER_H
 #define _YUV420TORGBCONVERTER_H
 
-
-#ifdef _BUILD_FOR_SHORT
-	typedef short yuvType;
-#else
-	typedef signed char yuvType ;
-#endif
+typedef short yuvType;
 
 /*
 ===========================================================================

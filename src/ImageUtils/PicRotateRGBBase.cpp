@@ -32,17 +32,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ===========================================================================
 */
 #include "PicRotateRGBBase.h"
-#include "string.h"
+#ifdef _WINDOWS
+#define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
+#include <windows.h>
+#else
+#include <stdio.h>
+#include <string.h>
+#endif
 
 PicRotateRGBBase::PicRotateRGBBase()
 {
-  m_eMode = ROTATE_NONE;
+	m_eMode = ROTATE_NONE;
 }
 
 PicRotateRGBBase::~PicRotateRGBBase()
-{
-
-}
+{;}
 
 bool PicRotateRGBBase::Rotate( void* pInImg, void* pOutImg )
 {
@@ -165,4 +169,3 @@ bool PicRotateRGBBase::Rotate( void* pInImg, void* pOutImg )
 		}
 	}
 }
-

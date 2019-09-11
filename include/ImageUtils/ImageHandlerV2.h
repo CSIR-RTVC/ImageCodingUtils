@@ -19,8 +19,6 @@ RESTRICTIONS			:
 */
 #include <math.h>
 #include <string>
-#include <Windows.h>
-
 using std::string;
 
 #ifndef _IMAGEHANDLERV2_H
