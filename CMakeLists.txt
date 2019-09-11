@@ -40,7 +40,6 @@ SET(CODEC_UTIL_HDRS
     ./include/CodecUtils/CAVLCH264Impl2.h
     ./include/CodecUtils/CAVLCH264Impl.h
     ./include/CodecUtils/CodecDistortionDef.h
-    ./include/CodecUtils/CodecUtilsPch.h
     ./include/CodecUtils/CodedBlkPatternH264VlcDecoder.h
     ./include/CodecUtils/CodedBlkPatternH264VlcEncoder.h
     ./include/CodecUtils/CoeffTokenH264VlcDecoder.h
@@ -224,7 +223,6 @@ SET(CODEC_UTILS_SRCS
     ./src/CodecUtils/BlockH263.cpp
     ./src/CodecUtils/BlockH264.cpp
     ./src/CodecUtils/CAVLCH264Impl.cpp
-    ./src/CodecUtils/CodecUtilsPch.cpp
     ./src/CodecUtils/CodedBlkPatternH264VlcDecoder.cpp
     ./src/CodecUtils/CodedBlkPatternH264VlcEncoder.cpp
     ./src/CodecUtils/CoeffTokenH264VlcDecoder.cpp
@@ -485,7 +483,6 @@ SET(IMAGE_UTIL_HDRS
     ./include/ImageUtils/Rlcodec.h
     ./include/ImageUtils/Sampler.h
     ./include/ImageUtils/SampleSet.h
-    ./include/ImageUtils/stdafx.h
     ./include/ImageUtils/VectorQuantiser.h
     ./include/ImageUtils/VectorQuantiserVlcEncoder.h
     ./include/ImageUtils/VectorSpace.h
