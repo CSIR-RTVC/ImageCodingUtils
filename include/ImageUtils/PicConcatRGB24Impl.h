@@ -10,7 +10,7 @@ DESCRIPTION				: An RGB24 implementation derived from the general
 										PicConcatBase() class. Concatenate a packed RGB24 
 										image	to another packed RGB24 image.
 
-COPYRIGHT					: (c)CSIR 2007-2010 all rights resevered
+COPYRIGHT					: (c)CSIR 2007-2017 all rights reserved
 
 LICENSE						: Software License Agreement (BSD License)
 

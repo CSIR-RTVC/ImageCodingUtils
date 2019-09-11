@@ -10,7 +10,7 @@ DESCRIPTION		: Uses double precision floating point RGB 24 bit to YUV420 colour
 								convertion derived from the RGBtoYUV420ConverterVer16 base class.
 								The YUV planar output is stored with 16-bits per colour component.
 
-COPYRIGHT			:	(c)CSIR 2007-2012 all rights resevered
+COPYRIGHT			:	(c)CSIR 2007-2014 all rights resevered
 
 LICENSE				: Software License Agreement (BSD License)
 

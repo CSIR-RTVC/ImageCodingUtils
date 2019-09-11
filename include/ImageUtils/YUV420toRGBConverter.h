@@ -12,7 +12,7 @@ DESCRIPTION		: Colour convertions are required on the output of
 								This class is the base class defining the minimum interface
 								and properties for all derived classes. 
 
-COPYRIGHT			:	(c)CSIR 2007-2010 all rights resevered
+COPYRIGHT			:	(c)CSIR 2007-2015 all rights resevered
 
 LICENSE				: Software License Agreement (BSD License)
 

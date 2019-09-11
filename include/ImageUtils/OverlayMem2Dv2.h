@@ -12,7 +12,7 @@ DESCRIPTION		: A class to overlay a two-dimensional mem structure onto
 								short (16-bit variables). Static proxies are used	to reduce 
 								the memory footprint of the class.
 
-COPYRIGHT			: (c)CSIR 2007-2010 all rights resevered
+COPYRIGHT			: (c)CSIR 2007-2017 all rights resevered
 
 LICENSE				: Software License Agreement (BSD License)
 
@@ -46,6 +46,11 @@ RESTRICTIONS	: Redistribution and use in source and binary forms, with or withou
 #ifndef _OVERLAYMEM2DV2_H
 #define _OVERLAYMEM2DV2_H
 
+/*
+---------------------------------------------------------------------------
+Class definition.
+---------------------------------------------------------------------------
+*/
 class OverlayMem2Dv2
 {
 	/// Construction and destruction.

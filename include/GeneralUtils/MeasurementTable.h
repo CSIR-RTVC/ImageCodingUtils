@@ -9,7 +9,7 @@ FILE NAME			: MeasurementTable.h
 DESCRIPTION		: A class to hold measurement data in the form of a table
 								with a set number of columns and rows.
 
-COPYRIGHT			: (c)CSIR 2007-2013 all rights resevered
+COPYRIGHT			: (c)CSIR 2007-2017 all rights resevered
 
 LICENSE				: Software License Agreement (BSD License)
 

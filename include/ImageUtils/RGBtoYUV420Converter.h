@@ -13,7 +13,7 @@ DESCRIPTION		: Colour convertions to YUV420 are required on the input of
 								properties for all derived classes. The conversion method
 								is pure virtual and must be implemented by derived classes.
 
-COPYRIGHT			:	(c)CSIR 2007-2010 all rights resevered
+COPYRIGHT			:	(c)CSIR 2007-2015 all rights resevered
 
 LICENSE				: Software License Agreement (BSD License)
 

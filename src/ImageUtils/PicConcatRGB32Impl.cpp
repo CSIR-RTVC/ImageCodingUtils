@@ -10,7 +10,7 @@ DESCRIPTION				: An RGB32 implementation derived from the general
 										PicConcatBase() class. Concatenate a packed RGB32 
 										image	to another packed RGB32 image.
 
-COPYRIGHT					: (c)CSIR 2007-2010 all rights resevered
+COPYRIGHT					: (c)CSIR 2007-2017 all rights reserved
 
 LICENSE						: Software License Agreement (BSD License)
 
