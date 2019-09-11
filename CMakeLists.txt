@@ -37,8 +37,9 @@ target_include_directories(vpp
     PUBLIC
         $<INSTALL_INTERFACE:include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/>
-		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/ImageUtils/>
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/CodecUtils/>
+		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/GeneralUtils/>
+		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/ImageUtils/>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
