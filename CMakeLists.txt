@@ -595,6 +595,14 @@ SET(IMAGE_UTILS_SRCS
     #WImgPce.cpp
 )
 
+SOURCE_GROUP("Source Files\\GeneralUtils" FILES ${GEN_UTILS_SRCS})
+SOURCE_GROUP("Source Files\\CodecUtils" FILES ${CODEC_UTILS_SRCS})
+SOURCE_GROUP("Source Files\\ImageUtils" FILES ${IMAGE_UTILS_SRCS})
+
+SOURCE_GROUP("Header Files\\GeneralUtils" FILES ${GEN_UTIL_HDRS})
+SOURCE_GROUP("Header Files\\CodecUtils" FILES ${CODEC_UTIL_HDRS})
+SOURCE_GROUP("Header Files\\ImageUtils" FILES ${IMAGE_UTIL_HDRS})
+
 # interface library for now
 add_library(vpp STATIC
     ${CODEC_UTILS_SRCS} 
